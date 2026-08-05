@@ -17,7 +17,9 @@ import androidx.glance.appwidget.updateAll
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -52,6 +54,7 @@ object WidgetSync {
 
     private const val TAG = "WidgetSync"
     private const val WORK_NAME = "streak-widget-refresh"
+    private const val SEED_WORK_NAME = "streak-widget-seed"
 
     /** Where each widget keeps its habit list. */
     val HABITS_JSON = stringPreferencesKey("habits_json")
@@ -89,6 +92,32 @@ object WidgetSync {
         } catch (e: Exception) {
             Log.e(TAG, "Widget refresh failed", e)
         }
+    }
+
+    /**
+     * Refresh once, very soon, from somewhere that must not block.
+     *
+     * A BroadcastReceiver cannot simply launch a coroutine and hope: the
+     * process may be killed the moment onReceive returns. The usual answer is
+     * goAsync(), but that is unavailable inside a GlanceAppWidgetReceiver —
+     * goAsync() may be called only ONCE per broadcast, and Glance's own
+     * onReceive has already claimed it. A second call returns null, which
+     * Kotlin sees as a non-null platform type, so `pending.finish()` throws
+     * NullPointerException on a background thread and takes the process with
+     * it — leaving a permanently blank widget and a crash far from the cause.
+     *
+     * Handing the work to WorkManager sidesteps that entirely: it keeps the
+     * process alive on its own terms and survives the receiver returning.
+     */
+    fun refreshSoon(context: Context) {
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            SEED_WORK_NAME,
+            ExistingWorkPolicy.REPLACE,
+            // Deliberately unconstrained, unlike the periodic refresh: a
+            // signed-out user has no network to wait for, and a signed-in one
+            // can still paint from the Firestore disk cache.
+            OneTimeWorkRequestBuilder<WidgetRefreshWorker>().build(),
+        )
     }
 
     /** True when at least one widget is on a home screen — so the app can skip
@@ -161,8 +190,12 @@ class ScreenUnlockReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action != Intent.ACTION_USER_PRESENT) return
         // goAsync keeps the broadcast alive past onReceive; finish() must run
-        // on every path or the system logs a leak.
-        val pending = goAsync()
+        // on every path or the system logs a leak. Safe to call here — this is
+        // a plain receiver, so nothing has claimed the pending result already.
+        // Declared nullable anyway: goAsync() is a platform type that really
+        // can return null, and treating it as non-null is what crashed
+        // HabitWidgetReceiver. See WidgetSync.refreshSoon.
+        val pending: PendingResult? = goAsync()
         val appContext = context.applicationContext
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -170,7 +203,7 @@ class ScreenUnlockReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 Log.e("WidgetSync", "Unlock refresh failed", e)
             } finally {
-                pending.finish()
+                pending?.finish()
             }
         }
     }

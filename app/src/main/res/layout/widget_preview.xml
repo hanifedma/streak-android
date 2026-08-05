@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The picture shown in the widget picker. Static by necessity: the picker
-     renders this without running the app. -->
+<!--
+  The picture shown in the widget picker. Static by necessity: the picker
+  renders this without running the app, so it cannot be the real Glance widget.
+
+  Only classes on the RemoteViews allowlist may appear here — a widget layout
+  is inflated in the launcher's process, not ours. android.widget.Space is NOT
+  on that list, and using it made the picker show "Couldn't add widget." with
+  the real reason ("Class not allowed to be inflated") buried in logcat.
+  Spacing therefore uses layout_marginTop rather than a spacer view.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -16,13 +24,10 @@
         android:textSize="14sp"
         android:textStyle="bold" />
 
-    <Space
-        android:layout_width="match_parent"
-        android:layout_height="8dp" />
-
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
         android:text="@string/widget_preview_row_1"
         android:textColor="#4ADE80"
         android:textSize="13sp" />

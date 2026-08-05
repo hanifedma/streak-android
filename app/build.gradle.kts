@@ -1,7 +1,21 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
+
+// Signing credentials live outside version control, in a gitignored
+// keystore.properties beside the root build file. A checkout without that file
+// (or without the .jks it names) still builds — release just comes out
+// unsigned, which is the honest outcome rather than a confusing failure.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val keystoreFile = keystoreProperties.getProperty("storeFile")
+    ?.let { rootProject.file(it) }
+    ?.takeIf { it.exists() }
 
 // Streak mirrors the web app: it works fully on-device with no setup at all,
 // and lights up Google sign-in + Firestore sync as soon as a real
@@ -36,10 +50,22 @@ android {
         buildConfigField("boolean", "FIREBASE_CONFIGURED", firebaseConfigured.toString())
     }
 
+    signingConfigs {
+        if (keystoreFile != null) {
+            create("release") {
+                storeFile = keystoreFile
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             optimization {
-                enable = false
+                enable = true
             }
         }
     }

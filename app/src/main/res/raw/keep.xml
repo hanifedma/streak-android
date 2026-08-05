@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Resources the shrinker cannot see being used.
+
+  google-services.json generates string/default_web_client_id, and
+  StreakViewModel reads it with Resources.getIdentifier() rather than
+  R.string.default_web_client_id — it has to, because the resource does not
+  exist in a checkout without google-services.json, and a static reference
+  would fail to compile there.
+
+  A name-based lookup is invisible to the resource shrinker, so a release build
+  dropped this string while keeping every other Firebase one (those libraries
+  ship their own keep rules). The result was nasty and release-only: Firebase
+  initialised, Firestore synced, and only Google sign-in failed — with a
+  generic error, because the client id came back blank.
+
+  Verified by building with and without google-services.json and dumping the
+  APK's resource table both ways.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@string/default_web_client_id" />

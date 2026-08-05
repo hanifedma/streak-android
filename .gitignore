@@ -14,3 +14,11 @@ local.properties
 # secrets), but the file is per-developer, so it stays out of the repo by
 # default. Remove this line if you'd rather commit it.
 app/google-services.json
+
+# The release signing key and its passwords. These ARE secrets, and unlike the
+# Firebase keys they are unrecoverable: whoever holds the .jks can ship an
+# update that Android accepts as genuinely yours, and losing it means no future
+# build can ever update an installed copy. Back it up somewhere private.
+*.jks
+*.keystore
+keystore.properties

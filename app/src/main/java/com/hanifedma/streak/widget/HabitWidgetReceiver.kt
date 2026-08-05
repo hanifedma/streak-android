@@ -2,10 +2,6 @@ package com.hanifedma.streak.widget
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
-import android.util.Log
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 
@@ -38,19 +34,11 @@ class HabitWidgetReceiver : GlanceAppWidgetReceiver() {
         // Covers the case where work was cancelled while no widget existed and
         // one has since been added back.
         WidgetSync.schedule(context)
-        // Load the habits and push them into widget state. This is the right
-        // place for it — outside any Glance composition, so it cannot contend
-        // with the session's hold on the state datastore.
-        val pending = goAsync()
-        val appContext = context.applicationContext
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                WidgetSync.refreshNow(appContext)
-            } catch (e: Exception) {
-                Log.e("HabitWidgetReceiver", "Seeding widget failed", e)
-            } finally {
-                pending.finish()
-            }
-        }
+        // Load the habits and push them into widget state. Seeding belongs
+        // here — outside any Glance composition, so it cannot contend with the
+        // session's hold on the state datastore — and it goes through
+        // WorkManager rather than goAsync(), which Glance has already consumed
+        // for this broadcast. See WidgetSync.refreshSoon.
+        WidgetSync.refreshSoon(context)
     }
 }

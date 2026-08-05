@@ -53,6 +53,7 @@ SDK 37 and runs on Android 7.0 (API 24) and up.
 ./gradlew installDebug           # build + install on a connected device
 ./gradlew testDebugUnitTest      # run the logic tests
 ./gradlew lintDebug              # static analysis
+./gradlew assembleRelease        # the real thing — signed and minified
 ```
 
 > If Gradle picks the wrong JDK, point it at Android Studio's bundled one:
@@ -62,6 +63,58 @@ SDK 37 and runs on Android 7.0 (API 24) and up.
 app simply runs in device-only mode — no sign-in, no sync, everything else
 works. That is deliberate: `app/build.gradle.kts` applies the Google Services
 plugin *only* when the file exists, so a fresh clone is never broken.
+
+---
+
+## Release builds
+
+`assembleRelease` produces a signed, R8-minified APK — **3.1 MB against the
+debug build's 21 MB**, and without the debug build's `debuggable` flag.
+
+Signing credentials come from a gitignored `keystore.properties` next to the
+root build file:
+
+```properties
+storeFile=streak-release.jks
+storePassword=…
+keyAlias=streak
+keyPassword=…
+```
+
+Without that file (or without the `.jks` it names) the project still builds;
+release just comes out unsigned, which is the honest outcome rather than a
+confusing failure. Generate a key with:
+
+```bash
+keytool -genkeypair -v -keystore streak-release.jks -alias streak \
+  -keyalg RSA -keysize 4096 -validity 10000
+```
+
+> **Back the `.jks` up somewhere private.** Unlike the Firebase keys it really
+> is a secret, and it is unrecoverable: Android only accepts an update signed
+> by the same key, so losing it means every installed copy has to be
+> uninstalled and reinstalled from scratch.
+
+Add the release key's SHA-1 to Firebase alongside the debug one, or sign-in
+works in debug and fails in release:
+
+```bash
+keytool -list -v -alias streak -keystore streak-release.jks | grep SHA1
+```
+
+### What minification needed
+
+R8 and resource shrinking each broke something that only showed up at runtime,
+in release, with no crash to point at. Both fixes are small, and both are
+documented where they live rather than here:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Google sign-in fails with a generic error; sync itself works | `default_web_client_id` is read via `getIdentifier`, so the resource shrinker cannot see it in use and drops it. Firebase's own resources survive — those libraries ship keep rules. | `res/raw/keep.xml` |
+| Widget renders correctly; tapping a habit does nothing | Glance constructs `ActionCallback`s reflectively, so R8 keeps the class but strips its no-arg constructor. | `keepRules/rules.keep` |
+
+Both are verified by building the APK and dumping its resource table, not by
+assuming — the failure modes are quiet enough that assuming is how they ship.
 
 ---
 
@@ -83,7 +136,9 @@ habits. If you followed the web README, it is `streak-4fc92`.
      -storepass android -keypass android | grep SHA1
    ```
 
-   Paste the SHA-1. Add your release keystore's SHA-1 too when you ship.
+   Paste the SHA-1, and add the release keystore's too — see
+   [Release builds](#release-builds). A fingerprint is per signing key *and*
+   per machine, so a checkout on a second computer needs its own added.
 5. Download **`google-services.json`** and drop it in **`app/`**
 6. Rebuild. The sign-in screen appears on next launch.
 
