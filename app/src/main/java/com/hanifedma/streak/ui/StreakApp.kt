@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.padding
@@ -63,6 +64,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hanifedma.streak.BuildConfig
 import com.hanifedma.streak.core.Habit
 import com.hanifedma.streak.i18n.Lang
+import com.hanifedma.streak.i18n.Strings
 import com.hanifedma.streak.i18n.Strings.t
 import com.hanifedma.streak.ui.screens.AboutSheet
 import com.hanifedma.streak.ui.screens.ArchivedSheet
@@ -551,17 +553,20 @@ private fun PillButton(label: String, onClick: () -> Unit, accent: Boolean = fal
     val c = Streak.colors
     Box(
         Modifier
-            .height(38.dp)
+            // A floor rather than a fixed height, so the label still fits when
+            // the system font is scaled up.
+            .heightIn(min = 38.dp)
             .background(if (accent) c.accent else c.surface2, RoundedCornerShape(11.dp))
             .border(1.dp, if (accent) c.accent else c.border, RoundedCornerShape(11.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
             color = if (accent) c.accentContrast else c.text,
             fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
         )
     }
 }
@@ -583,14 +588,14 @@ private fun HabitsToolbar(
                 onValueChange = onSearch,
                 placeholder = { Text(t(lang, "habits.search"), color = c.faint, fontSize = 14.sp) },
                 singleLine = true,
-                modifier = Modifier.weight(1f).height(52.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 52.dp),
             )
             Spacer(Modifier.width(8.dp))
             PillButton("⇅ " + t(lang, "habits.reorder"), onReorder)
         }
         Spacer(Modifier.height(6.dp))
         Text(
-            t(lang, "habits.count", "n" to state.active.size),
+            Strings.tCount(lang, "habits.count", state.active.size),
             color = c.muted, fontSize = 12.sp,
         )
     }

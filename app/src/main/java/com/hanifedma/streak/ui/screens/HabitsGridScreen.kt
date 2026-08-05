@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -131,8 +132,16 @@ fun HabitsGridScreen(
             ) {
                 Column {
                     // ---- header row ----
-                    Row(Modifier.fillMaxWidth().height(38.dp)) {
-                        Box(Modifier.width(nameW).fillMaxSize())
+                    // heightIn, not height: the weekday and the day number are
+                    // both sized in sp, so they grow with the system font
+                    // setting. At a fixed 38.dp a large font scale pushed the
+                    // second line past the bottom edge and sliced the day
+                    // numbers in half.
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 38.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.width(nameW))
                         Row(
                             Modifier
                                 .weight(1f)
@@ -191,8 +200,10 @@ private fun DayHeader(key: String, cellW: Dp, names: DateNames, isToday: Boolean
     val c = Streak.colors
     val dow = Habits.dowOf(key)
     val day = key.substring(8).trimStart('0')
+    // Wraps its content rather than filling a fixed height, so the row above
+    // can grow with it when the system font is scaled up.
     Column(
-        Modifier.width(cellW).fillMaxSize(),
+        Modifier.width(cellW).padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {

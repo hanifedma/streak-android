@@ -72,6 +72,7 @@ object Strings {
         "habits.emptySub" to "‘새 습관’을 눌러 시작해 보세요.",
         "habits.search" to "습관 검색…",
         "habits.count" to "습관 {n}개",
+        "habits.count.one" to "습관 {n}개",
         "habits.jumpToday" to "오늘로",
         "habits.reorder" to "순서 바꾸기",
         "habits.scrollHint" to "옆으로 넘기면 지난 기록을 볼 수 있습니다",
@@ -182,6 +183,7 @@ object Strings {
         "toast.unarchived" to "‘{name}’을(를) 보관 해제했습니다",
         "toast.undo" to "실행 취소",
         "toast.imported" to "습관 {n}개를 가져왔습니다",
+        "toast.imported.one" to "습관 {n}개를 가져왔습니다",
         "toast.exported" to "백업을 내보냈습니다",
         "toast.cleared" to "모두 삭제했습니다",
         "toast.offline" to "오프라인 · 저장된 기록을 보는 중",
@@ -250,6 +252,7 @@ object Strings {
         "habits.emptySub" to "Press “New habit” to get started.",
         "habits.search" to "Search habits…",
         "habits.count" to "{n} habits",
+        "habits.count.one" to "{n} habit",
         "habits.jumpToday" to "Today",
         "habits.reorder" to "Reorder",
         "habits.scrollHint" to "Scroll sideways to see earlier days",
@@ -354,6 +357,7 @@ object Strings {
         "toast.unarchived" to "Restored “{name}”",
         "toast.undo" to "Undo",
         "toast.imported" to "Imported {n} habits",
+        "toast.imported.one" to "Imported {n} habit",
         "toast.exported" to "Backup exported",
         "toast.cleared" to "Everything deleted",
         "toast.offline" to "Offline · showing your saved copy",
@@ -390,6 +394,20 @@ object Strings {
         for ((name, value) in params) s = s.replace("{$name}", value.toString())
         return s
     }
+
+    /**
+     * A string that counts something: "1 habit" vs "2 habits".
+     *
+     * English needs a singular form; without one the habits toolbar read
+     * "1 habits", which is the very first thing anyone sees after adding their
+     * first habit. Korean has no plural, so both keys hold the same text there
+     * — defined rather than left to fall back, because the fallback would
+     * reach the English table and print English inside a Korean UI.
+     */
+    fun tCount(lang: Lang, key: String, n: Int): String = t(lang, countKey(key, n), "n" to n)
+
+    /** The key a counted string resolves to, for callers that render later. */
+    fun countKey(key: String, n: Int): String = if (n == 1) "$key.one" else key
 }
 
 /**

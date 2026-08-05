@@ -6,10 +6,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hanifedma.streak.core.Freq
@@ -202,7 +207,7 @@ fun EditorSheet(
                     Box(
                         Modifier
                             .weight(1f)
-                            .height(44.dp)
+                            .heightIn(min = 44.dp)
                             .background(
                                 if (on) c.accent else c.surface2,
                                 RoundedCornerShape(11.dp),
@@ -337,13 +342,24 @@ private fun <T> SegmentedRow(
     onSelect: (T) -> Unit,
 ) {
     val c = Streak.colors
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    // IntrinsicSize.Min + fillMaxHeight keeps every segment the same height when
+    // one of them wraps — otherwise a two-line label makes its own button taller
+    // than its neighbours.
+    Row(
+        Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
         options.forEach { (value, label) ->
             val on = value == selected
             Box(
                 Modifier
                     .weight(1f)
-                    .height(44.dp)
+                    .fillMaxHeight()
+                    // A minimum, not a fixed height. Labels are sized in sp, so
+                    // they grow with the system font setting: "Times per week"
+                    // does not fit one line across a third of a narrow phone,
+                    // and a fixed 44.dp silently clipped it to "Times per".
+                    .heightIn(min = 44.dp)
                     .background(if (on) c.accent else c.surface2, RoundedCornerShape(11.dp))
                     .border(1.dp, if (on) c.accent else c.border, RoundedCornerShape(11.dp))
                     .clickable { onSelect(value) },
@@ -351,9 +367,13 @@ private fun <T> SegmentedRow(
             ) {
                 Text(
                     label,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
                     color = if (on) c.accentContrast else c.muted,
                     fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
+                    lineHeight = 16.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -377,12 +397,21 @@ private fun DatePickerRow(value: String, max: String, names: DateNames, onChange
         Box(
             Modifier
                 .weight(1f)
-                .height(44.dp)
+                // "Wednesday, August 5, 2026" is long, and longer still at a
+                // large font scale — wrapping is much better than losing the
+                // year off the end.
+                .heightIn(min = 44.dp)
                 .background(c.surface2, RoundedCornerShape(11.dp))
                 .border(1.dp, c.border, RoundedCornerShape(11.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(names.longDate(value), color = c.text, fontSize = 13.sp, maxLines = 1)
+            Text(
+                names.longDate(value),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                color = c.text, fontSize = 13.sp, lineHeight = 16.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
         }
         Spacer(Modifier.width(8.dp))
         StepSquare("+") {

@@ -6,8 +6,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -36,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -251,24 +254,31 @@ private fun <T> PillGroup(
 ) {
     val c = Streak.colors
     Row(
-        if (fill) Modifier.fillMaxWidth() else Modifier,
+        (if (fill) Modifier.fillMaxWidth() else Modifier).height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         options.forEach { (value, label) ->
             val on = value == selected
             Box(
                 (if (fill) Modifier.weight(1f) else Modifier)
-                    .height(38.dp)
+                    .fillMaxHeight()
+                    // A floor, not a fixed height: labels are in sp and grow
+                    // with the system font setting.
+                    .heightIn(min = 38.dp)
                     .background(if (on) c.accent else c.surface2, RoundedCornerShape(10.dp))
                     .border(1.dp, if (on) c.accent else c.border, RoundedCornerShape(10.dp))
                     .clickable { onSelect(value) }
-                    .padding(horizontal = 14.dp),
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     label,
                     color = if (on) c.accentContrast else c.muted,
                     fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    lineHeight = 16.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

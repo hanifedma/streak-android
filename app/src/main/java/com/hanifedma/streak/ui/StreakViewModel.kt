@@ -27,6 +27,7 @@ import com.hanifedma.streak.data.Prefs
 import com.hanifedma.streak.data.WriteOp
 import com.hanifedma.streak.i18n.DateNames
 import com.hanifedma.streak.i18n.Lang
+import com.hanifedma.streak.i18n.Strings
 import com.hanifedma.streak.widget.WidgetSync
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -452,7 +453,8 @@ class StreakViewModel(app: Application) : AndroidViewModel(app) {
                 val result = Backup.merge(_state.value.habits, incoming)
                 if (result.ops.isEmpty()) { toast("toast.imported", listOf("n" to 0)); return@launch }
                 store?.writeMany(result.ops)
-                toast("toast.imported", listOf("n" to result.added + result.merged))
+                val n = result.added + result.merged
+                toast(Strings.countKey("toast.imported", n), listOf("n" to n))
             } catch (e: Exception) {
                 Log.e(TAG, "Import failed", e); toast("err.import", isError = true)
             }

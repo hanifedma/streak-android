@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -220,10 +222,14 @@ private fun TodayRow(
                 Spacer(Modifier.width(4.dp))
                 Box(
                     Modifier
-                        .width(58.dp).height(36.dp)
+                        // Minimums, not fixed: a four-digit value at a large
+                        // font scale needs more than 58.dp, and clipping the
+                        // number would misreport the day's progress.
+                        .widthIn(min = 58.dp).heightIn(min = 36.dp)
                         .background(c.surface, RoundedCornerShape(9.dp))
                         .border(1.dp, c.border, RoundedCornerShape(9.dp))
-                        .clickable(onClick = onEditValue),
+                        .clickable(onClick = onEditValue)
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
