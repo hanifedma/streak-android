@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ equivalent of backup_rules.xml.
+
+     Cloud backup takes settings only, for the reason above. A direct
+     device-to-device transfer does carry local habits, because someone moving
+     phones in local-only mode has no other copy. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="sharedpref" path="streak_prefs.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="sharedpref" path="streak_prefs.xml" />
+        <include domain="file" path="habits.json" />
+    </device-transfer>
+</data-extraction-rules>

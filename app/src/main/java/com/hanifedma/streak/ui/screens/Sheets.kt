@@ -1,0 +1,435 @@
+package com.hanifedma.streak.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.hanifedma.streak.core.Habit
+import com.hanifedma.streak.core.HabitType
+import com.hanifedma.streak.core.Habits
+import com.hanifedma.streak.i18n.DateNames
+import com.hanifedma.streak.i18n.Lang
+import com.hanifedma.streak.i18n.Strings.t
+import com.hanifedma.streak.ui.UiState
+import com.hanifedma.streak.ui.components.HabitDot
+import com.hanifedma.streak.ui.components.SectionLabel
+import com.hanifedma.streak.ui.theme.Streak
+
+/**
+ * The sheet a grid cell opens: record an amount, mark done, skip, or clear.
+ *
+ * Skip is deliberately first-class rather than hidden — it is what keeps a
+ * streak honest through illness and holidays.
+ */
+@Composable
+fun CellSheet(
+    habit: Habit,
+    dayKey: String,
+    lang: Lang,
+    names: DateNames,
+    onSet: (Double?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val c = Streak.colors
+    val existing = Habits.entryOf(habit, dayKey)
+    var amount by remember(habit.id, dayKey) {
+        mutableStateOf(
+            if (existing == null || existing == Habits.SKIP) ""
+            else trimAmount(existing)
+        )
+    }
+
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            HabitDot(c.habit(habit.color))
+            Spacer(Modifier.width(10.dp))
+            Text(
+                habit.name,
+                modifier = Modifier.weight(1f),
+                color = c.text, fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            Text(names.longDate(dayKey), color = c.muted, fontSize = 12.sp)
+        }
+        Spacer(Modifier.height(16.dp))
+
+        if (habit.type == HabitType.MEASURABLE) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { s -> amount = s.filter { it.isDigit() || it == '.' } },
+                    label = { Text(t(lang, "cell.setValue")) },
+                    suffix = if (habit.unit.isNotBlank()) {
+                        { Text(habit.unit, color = c.muted) }
+                    } else null,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    onClick = {
+                        // Clearing the field means "no entry", not "zero".
+                        onSet(if (amount.isBlank()) null else amount.toDoubleOrNull())
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = c.accent, contentColor = c.accentContrast,
+                    ),
+                ) { Text(t(lang, "cell.save")) }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        SheetAction("✔  " + t(lang, "cell.markDone")) { onSet(Habits.doneValue(habit)) }
+        SheetAction("–  " + t(lang, "cell.markSkip")) { onSet(Habits.SKIP) }
+        SheetAction("✕  " + t(lang, "cell.clear"), danger = true) { onSet(null) }
+
+        Spacer(Modifier.height(8.dp))
+        TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+            Text(t(lang, "common.cancel"), color = c.muted)
+        }
+    }
+}
+
+@Composable
+private fun SheetAction(label: String, danger: Boolean = false, onClick: () -> Unit) {
+    val c = Streak.colors
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+    ) {
+        Text(label, color = if (danger) c.danger else c.text, fontSize = 15.sp)
+    }
+}
+
+/** Settings: display preferences and the data tools. */
+@Composable
+fun SettingsSheet(
+    state: UiState,
+    lang: Lang,
+    onDark: (Boolean) -> Unit,
+    onLang: (Lang) -> Unit,
+    onWeekStart: (Int) -> Unit,
+    onExportJson: () -> Unit,
+    onExportCsv: () -> Unit,
+    onImport: () -> Unit,
+    onClearAll: () -> Unit,
+    onAddWidget: (() -> Unit)?,
+    onDismiss: () -> Unit,
+) {
+    val c = Streak.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 24.dp),
+    ) {
+        Text(t(lang, "settings.title"), color = c.text, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(18.dp))
+
+        SectionLabel(t(lang, "settings.display"))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(t(lang, "settings.theme"), color = c.text, modifier = Modifier.weight(1f))
+            Text(
+                t(lang, if (state.dark) "theme.dark" else "theme.light"),
+                color = c.muted, fontSize = 13.sp,
+            )
+            Spacer(Modifier.width(8.dp))
+            Switch(checked = state.dark, onCheckedChange = onDark)
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(t(lang, "settings.language"), color = c.text, modifier = Modifier.weight(1f))
+            PillGroup(
+                options = listOf(Lang.KO to "한국어", Lang.EN to "English"),
+                selected = lang,
+                onSelect = onLang,
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(t(lang, "settings.weekStart"), color = c.text)
+        Spacer(Modifier.height(8.dp))
+        PillGroup(
+            options = listOf(0 to t(lang, "settings.weekStart.0"), 1 to t(lang, "settings.weekStart.1")),
+            selected = state.weekStart,
+            onSelect = onWeekStart,
+            fill = true,
+        )
+
+        Spacer(Modifier.height(22.dp))
+        SectionLabel(t(lang, "settings.data"))
+        Text(
+            t(lang, "settings.storage") + ": " +
+                t(lang, if (state.mode == "cloud") "settings.storage.cloud" else "settings.storage.local"),
+            color = c.muted, fontSize = 13.sp,
+        )
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(onClick = onExportJson, modifier = Modifier.fillMaxWidth()) {
+            Text(t(lang, "settings.export"))
+        }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = onExportCsv, modifier = Modifier.fillMaxWidth()) {
+            Text(t(lang, "settings.exportCsv"))
+        }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = onImport, modifier = Modifier.fillMaxWidth()) {
+            Text(t(lang, "settings.import"))
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(t(lang, "settings.importHint"), color = c.muted, fontSize = 12.sp)
+
+        Spacer(Modifier.height(22.dp))
+        if (onAddWidget != null) {
+            SectionLabel(t(lang, "settings.addWidget"))
+            OutlinedButton(onClick = onAddWidget, modifier = Modifier.fillMaxWidth()) {
+                Text("▦  " + t(lang, "settings.addWidget"))
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(t(lang, "settings.addWidgetHint"), color = c.muted, fontSize = 12.sp)
+            Spacer(Modifier.height(22.dp))
+        }
+        SectionLabel(t(lang, "settings.danger"))
+        TextButton(onClick = onClearAll) {
+            Text(t(lang, "settings.clear"), color = c.danger)
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = onDismiss,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = c.accent, contentColor = c.accentContrast,
+            ),
+        ) { Text(t(lang, "settings.done")) }
+    }
+}
+
+@Composable
+private fun <T> PillGroup(
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    fill: Boolean = false,
+) {
+    val c = Streak.colors
+    Row(
+        if (fill) Modifier.fillMaxWidth() else Modifier,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        options.forEach { (value, label) ->
+            val on = value == selected
+            Box(
+                (if (fill) Modifier.weight(1f) else Modifier)
+                    .height(38.dp)
+                    .background(if (on) c.accent else c.surface2, RoundedCornerShape(10.dp))
+                    .border(1.dp, if (on) c.accent else c.border, RoundedCornerShape(10.dp))
+                    .clickable { onSelect(value) }
+                    .padding(horizontal = 14.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label,
+                    color = if (on) c.accentContrast else c.muted,
+                    fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
+}
+
+/** Archived habits: restore or delete for good. */
+@Composable
+fun ArchivedSheet(
+    archived: List<Habit>,
+    lang: Lang,
+    onUnarchive: (Habit) -> Unit,
+    onDelete: (Habit) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val c = Streak.colors
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+        Text(t(lang, "archived.title"), color = c.text, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        Text(t(lang, "archived.hint"), color = c.muted, fontSize = 13.sp)
+        Spacer(Modifier.height(14.dp))
+
+        if (archived.isEmpty()) {
+            Text(t(lang, "archived.empty"), color = c.muted)
+        } else {
+            LazyColumn(
+                Modifier.heightIn(max = 420.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(archived, key = { it.id }) { h ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(c.surface, RoundedCornerShape(11.dp))
+                            .border(1.dp, c.border, RoundedCornerShape(11.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        HabitDot(c.habit(h.color))
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            h.name,
+                            modifier = Modifier.weight(1f),
+                            color = c.habit(h.color), fontWeight = FontWeight.SemiBold,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                        TextButton(onClick = { onUnarchive(h) }) {
+                            Text(t(lang, "editor.unarchive"), fontSize = 13.sp)
+                        }
+                        TextButton(onClick = { onDelete(h) }) {
+                            Text(t(lang, "editor.delete"), color = c.danger, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = onDismiss,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = c.accent, contentColor = c.accentContrast,
+            ),
+        ) { Text(t(lang, "settings.done")) }
+    }
+}
+
+/** About. */
+@Composable
+fun AboutSheet(lang: Lang, version: String, onDismiss: () -> Unit) {
+    val c = Streak.colors
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+        Text(t(lang, "about.title"), color = c.text, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+        Text(t(lang, "about.p1"), color = c.muted, fontSize = 14.sp)
+        Spacer(Modifier.height(8.dp))
+        Text(t(lang, "about.p2"), color = c.muted, fontSize = 14.sp)
+        Spacer(Modifier.height(12.dp))
+        Text("${t(lang, "about.version")}: $version", color = c.muted, fontSize = 13.sp)
+        Text("${t(lang, "about.web")}: hanifedma.com/streak/", color = c.muted, fontSize = 13.sp)
+        Spacer(Modifier.height(18.dp))
+        Button(
+            onClick = onDismiss,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = c.accent, contentColor = c.accentContrast,
+            ),
+        ) { Text(t(lang, "common.ok")) }
+    }
+}
+
+/** Reorder: drag a habit by its handle, or nudge it with the arrows. */
+@Composable
+fun ReorderSheet(
+    habits: List<Habit>,
+    lang: Lang,
+    onMove: (String, Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val c = Streak.colors
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+        Text(t(lang, "habits.reorder"), color = c.text, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        Text(t(lang, "reorder.hint"), color = c.muted, fontSize = 13.sp)
+        Spacer(Modifier.height(14.dp))
+
+        LazyColumn(
+            Modifier.heightIn(max = 460.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(habits, key = { it.id }) { h ->
+                val index = habits.indexOfFirst { it.id == h.id }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(c.surface, RoundedCornerShape(11.dp))
+                        .border(1.dp, c.border, RoundedCornerShape(11.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    HabitDot(c.habit(h.color))
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        h.name,
+                        modifier = Modifier.weight(1f),
+                        color = c.habit(h.color), fontWeight = FontWeight.SemiBold,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    ArrowButton("↑", enabled = index > 0) { onMove(h.id, -1) }
+                    Spacer(Modifier.width(6.dp))
+                    ArrowButton("↓", enabled = index < habits.size - 1) { onMove(h.id, 1) }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = onDismiss,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = c.accent, contentColor = c.accentContrast,
+            ),
+        ) { Text(t(lang, "reorder.done")) }
+    }
+}
+
+@Composable
+private fun ArrowButton(label: String, enabled: Boolean, onClick: () -> Unit) {
+    val c = Streak.colors
+    Box(
+        Modifier
+            .size(36.dp)
+            .background(c.surface2, RoundedCornerShape(9.dp))
+            .border(1.dp, c.border, RoundedCornerShape(9.dp))
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = if (enabled) c.text else c.faint, fontSize = 15.sp)
+    }
+}
+
+private fun trimAmount(v: Double): String =
+    if (v == Math.floor(v) && !v.isInfinite()) v.toLong().toString() else v.toString()

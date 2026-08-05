@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Only what the launch theme needs; the app's palette lives in
+         ui/theme/Color.kt. See that file for the full set. -->
+    <color name="streak_bg">#FF0F0F0F</color>
+</resources>

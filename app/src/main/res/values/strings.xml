@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">Streak</string>
+    <string name="widget_description">오늘의 습관을 홈 화면에서 바로 체크하세요 · Tick today\'s habits from your home screen</string>
+    <string name="widget_preview_row_1">✔  저금통</string>
+    <string name="widget_preview_row_2">✔  일기</string>
+</resources>

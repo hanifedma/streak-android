@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cloud backup covers settings only.
+
+  Habits are deliberately left out: a signed-in user's habits live in Firestore
+  and are restored from there, and re-seeding a stale habits.json over a synced
+  account is a good way to resurrect deleted habits. Listing an <include>
+  already limits backup to that path, so nothing else is carried.
+-->
+<full-backup-content>
+    <include domain="sharedpref" path="streak_prefs.xml" />
+</full-backup-content>

@@ -1,0 +1,16 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+/.kotlin
+
+# Your Firebase keys. Safe to publish (they identify the project, they are not
+# secrets), but the file is per-developer, so it stays out of the repo by
+# default. Remove this line if you'd rather commit it.
+app/google-services.json
