@@ -20,9 +20,11 @@ import java.io.IOException
  * Google sign-in through Credential Manager — the current API; the old
  * GoogleSignInClient/startActivityForResult flow is deprecated.
  *
- * Two passes on purpose: first ask only for accounts already used with this
- * app (no chooser if there's exactly one, which makes returning instant), then
- * fall back to showing every Google account on the device.
+ * Every Google account on the device is offered, always. Filtering to
+ * already-authorised accounts would make the common case one tap, but it also
+ * hides every other account behind no visible affordance — and because the web
+ * app shares this OAuth client, an account used there is already "authorised",
+ * so the filtered list is usually a list of one with no way past it.
  */
 class AuthManager(private val auth: FirebaseAuth, private val webClientId: String) {
 
@@ -44,8 +46,7 @@ class AuthManager(private val auth: FirebaseAuth, private val webClientId: Strin
         val manager = CredentialManager.create(context)
 
         val token = try {
-            requestToken(manager, context, filterByAuthorized = true)
-                ?: requestToken(manager, context, filterByAuthorized = false)
+            requestToken(manager, context)
         } catch (e: GetCredentialCancellationException) {
             return "err.auth.cancelled"
         } catch (e: NoCredentialException) {
@@ -73,33 +74,26 @@ class AuthManager(private val auth: FirebaseAuth, private val webClientId: Strin
         }
     }
 
-    private suspend fun requestToken(
-        manager: CredentialManager,
-        context: Context,
-        filterByAuthorized: Boolean,
-    ): String? {
+    private suspend fun requestToken(manager: CredentialManager, context: Context): String? {
         val option = GetGoogleIdOption.Builder()
             .setServerClientId(webClientId)
-            .setFilterByAuthorizedAccounts(filterByAuthorized)
-            // Skip the "one tap" auto-select so switching accounts stays possible.
+            // false = offer every Google account on the device, not only the
+            // ones that have signed into this app before.
+            .setFilterByAuthorizedAccounts(false)
+            // Skip the "one tap" auto-select so the chooser is always shown and
+            // switching accounts stays possible.
             .setAutoSelectEnabled(false)
             .build()
         val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
 
-        return try {
-            val result = manager.getCredential(context, request)
-            val cred = result.credential
-            if (cred is CustomCredential &&
-                cred.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-            ) {
-                GoogleIdTokenCredential.createFrom(cred.data).idToken
-            } else {
-                null
-            }
-        } catch (e: NoCredentialException) {
-            // Expected on the first pass when no account has been used here
-            // before — let the caller try again unfiltered.
-            if (filterByAuthorized) null else throw e
+        val result = manager.getCredential(context, request)
+        val cred = result.credential
+        return if (cred is CustomCredential &&
+            cred.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+        ) {
+            GoogleIdTokenCredential.createFrom(cred.data).idToken
+        } else {
+            null
         }
     }
 
