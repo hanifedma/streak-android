@@ -10,6 +10,25 @@ library: the whole thing is Compose, Firebase and about 3,500 lines of Kotlin.
 
 ---
 
+## What it looks like
+
+| Today | Habits grid | Stats |
+|:---:|:---:|:---:|
+| ![The Today checklist, with a progress ring and a row per habit due](docs/screenshots/today.png) | ![The habits grid: habits down the side, days across the top](docs/screenshots/grid.png) | ![Stats: streaks, 30-day completion, month heatmap](docs/screenshots/stats.png) |
+| What's due, and how far in | Every habit against every day | Streaks, completion, heatmap |
+
+| Habit editor | Drag to reorder | Light theme |
+|:---:|:---:|:---:|
+| ![The habit editor: name, colour, type, goal, target, repeat, start date](docs/screenshots/editor.png) | ![The reorder sheet mid-drag, one habit lifted above the others](docs/screenshots/reorder-drag.png) | ![The Today checklist in the light theme](docs/screenshots/today-light.png) |
+| Yes/no or measurable, any schedule | Press and hold a habit, then drag | Same screen, light |
+
+Windows 840dp and wider — a landscape phone, a foldable, a tablet — get the
+navigation rail *and* a permanent stats pane, from the same code:
+
+![Landscape: navigation rail on the left, Today in the middle, stats pane on the right](docs/screenshots/wide.png)
+
+---
+
 ## What's in it
 
 Everything the web app does:
@@ -21,6 +40,8 @@ Everything the web app does:
   ("Read 10 pages"), with *at least* / *at most* goals
 - **Schedules** — every day, certain weekdays, or N times per week
 - **Skip days** — transparent to streaks, so illness doesn't cost you a streak
+- **Reorder** — press and hold a habit anywhere on the row and drag it, or use
+  the arrows (which is also the path TalkBack can take)
 - **Google sign-in** with real-time sync, or no account at all
 - **Offline** — everything works with no signal and syncs when you're back
 - **Backup** — export JSON or CSV, import JSON (same format as the web app)

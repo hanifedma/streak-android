@@ -401,16 +401,6 @@ class StreakViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun moveHabit(id: String, delta: Int) {
-        val list = _state.value.active
-        val i = list.indexOfFirst { it.id == id }
-        val j = i + delta
-        if (i < 0 || j < 0 || j >= list.size) return
-        val ids = list.map { it.id }.toMutableList()
-        ids[i] = ids[j].also { ids[j] = ids[i] }
-        commitOrder(ids)
-    }
-
     fun clearAll() {
         viewModelScope.launch {
             try {

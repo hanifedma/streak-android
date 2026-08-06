@@ -385,7 +385,7 @@ fun StreakApp(vm: StreakViewModel, widthDp: Int) {
                     )
                     Sheet.Reorder -> ReorderSheet(
                         habits = state.active, lang = lang,
-                        onMove = { id, d -> vm.moveHabit(id, d) },
+                        onCommit = { ids -> vm.commitOrder(ids) },
                         onDismiss = { sheet = null },
                     )
                 }
