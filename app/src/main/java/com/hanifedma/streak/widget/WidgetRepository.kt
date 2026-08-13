@@ -84,15 +84,17 @@ object WidgetRepository {
         return LocalStore.get(context).readAll()
     }
 
-    /** Toggle one habit for one day, from the widget. */
+    /**
+     * Toggle one habit for one day, from the widget.
+     *
+     * What a tap writes comes from Habits.toggleValue, the same rule the app's
+     * grid and Today list use — so an avoid habit records a slip here exactly
+     * as it would in the app, and the two can never disagree.
+     */
     suspend fun toggle(context: Context, habitId: String, dayKey: String) {
         val habits = loadHabits(context, preferCache = true)
         val habit = habits.firstOrNull { it.id == habitId } ?: return
-        val done = Habits.statusOf(habit, dayKey).let {
-            it == com.hanifedma.streak.core.DayStatus.DONE ||
-                it == com.hanifedma.streak.core.DayStatus.SKIP
-        }
-        val value: Double? = if (done) null else Habits.doneValue(habit)
+        val value: Double? = Habits.toggleValue(habit, dayKey, Habits.todayKey())
 
         val fs = firestore(context)
         if (fs != null) {

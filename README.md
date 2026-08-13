@@ -38,6 +38,9 @@ Everything the web app does:
 - **Stats** — current/best streak, 30-day completion, month heatmap, by-weekday
 - **Habit types** — yes/no, or measurable with a target and unit
   ("Read 10 pages"), with *at least* / *at most* goals
+- **Build a habit, or break one** — an *Avoid it* habit ("no sweets") starts
+  each day already at **yes**: you tap only on the day you slip, and that day
+  is what breaks the streak
 - **Schedules** — every day, certain weekdays, or N times per week
 - **Skip days** — transparent to streaks, so illness doesn't cost you a streak
 - **Reorder** — press and hold a habit anywhere on the row and drag it, or use
@@ -231,7 +234,7 @@ widget/     HabitWidget.kt Glance widget, its state, and its refresh
 ### Notes on some decisions
 
 **`core/Habits.kt` is a line-for-line port of the web app's `habits.js`,** and
-`HabitsTest.kt` is a port of its test suite — 69 tests covering the same rules.
+`HabitsTest.kt` is a port of its test suite — 87 tests covering the same rules.
 Both clients agreeing on what a streak *is* matters more than either being
 clever, and the tests are what keep them agreeing.
 
@@ -252,6 +255,18 @@ look like it did nothing even though it is already saved and queued.
 cigarettes", a recorded 0 is a success and a blank day is not, so the UI shows
 "–" for no entry and never a misleading "0".
 
+**A habit's `polarity` decides what an empty day means.** `DO` is the ordinary
+kind — nothing recorded, nothing done. `AVOID` ("no sweets") inverts it: an
+empty day is **kept**, and a recorded `0` is the day you slipped. Two things
+fall out of that and are worth knowing:
+
+- The "empty means kept" rule stops at today, which is why `statusOf` and the
+  functions built on it take a `todayK`. Without it, tomorrow and the rest of
+  the month would render as a wall of successes nobody has earned yet.
+- What a tap writes lives in `Habits.toggleValue`, not in any screen. The Today
+  list, the grid and the **home-screen widget** all call it, so a tap means the
+  same thing in all three and they cannot drift apart.
+
 ---
 
 ## Testing
@@ -260,7 +275,7 @@ cigarettes", a recorded 0 is a success and a blank day is not, so the UI shows
 ./gradlew testDebugUnitTest
 ```
 
-69 tests over the domain logic. To run them under a different timezone — worth
+87 tests over the domain logic. To run them under a different timezone — worth
 doing after touching anything date-related:
 
 ```bash

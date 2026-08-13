@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -37,6 +38,7 @@ import com.hanifedma.streak.core.Habits
 import com.hanifedma.streak.core.StreakUnit
 import com.hanifedma.streak.i18n.DateNames
 import com.hanifedma.streak.i18n.Lang
+import com.hanifedma.streak.i18n.Strings
 import com.hanifedma.streak.i18n.Strings.t
 import com.hanifedma.streak.ui.UiState
 import com.hanifedma.streak.ui.components.EmptyState
@@ -65,8 +67,8 @@ fun TodayScreen(
     val lang = state.lang
     val key = state.today
     val all = state.active
-    val due = Habits.dueOn(all, key)
-    val progress = Habits.dayProgress(all, key)
+    val due = Habits.dueOn(all, key, state.today)
+    val progress = Habits.dayProgress(all, key, state.today)
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
@@ -158,9 +160,11 @@ private fun TodayRow(
 ) {
     val c = Streak.colors
     val hc = c.habit(habit.color)
-    val status = Habits.statusOf(habit, dayKey)
+    val status = Habits.statusOf(habit, dayKey, todayKey)
     val done = status == DayStatus.DONE
     val skipped = status == DayStatus.SKIP
+    val avoid = Habits.isAvoid(habit)
+    val broke = status == DayStatus.MISS
     val streak = Habits.computeStreaks(habit, todayKey, weekStart)
     val recorded = Habits.hasEntry(habit, dayKey)
     val value = Habits.entryOf(habit, dayKey)
@@ -168,8 +172,16 @@ private fun TodayRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .background(if (done) c.surface2 else c.surface, RoundedCornerShape(14.dp))
-            .border(1.dp, if (done) hc else c.border, RoundedCornerShape(14.dp))
+            .background(if (done && !avoid) c.surface2 else c.surface, RoundedCornerShape(14.dp))
+            .border(
+                1.dp,
+                when {
+                    broke -> c.danger
+                    done -> hc
+                    else -> c.border
+                },
+                RoundedCornerShape(14.dp),
+            )
             .clickable(onClick = onOpenStats)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -179,9 +191,12 @@ private fun TodayRow(
         Column(Modifier.weight(1f)) {
             Text(
                 habit.name,
-                color = hc, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                color = if (broke) c.danger else hc,
+                fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
-                textDecoration = if (done) TextDecoration.LineThrough else null,
+                // Nothing was crossed off an avoid habit — the day was simply
+                // not spoiled — so it never gets the struck-through treatment.
+                textDecoration = if (done && !avoid) TextDecoration.LineThrough else null,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val sub = when {
@@ -194,6 +209,12 @@ private fun TodayRow(
                         "$shown / ${names.num(habit.target)}" +
                             if (habit.unit.isNotBlank()) " ${habit.unit}" else ""
                     }
+                    // An avoid habit's row is already ticked when you arrive,
+                    // so the sub-line has to say *why* — "Kept" — or the tick
+                    // reads as something the user did.
+                    avoid -> Strings.statusText(lang, habit, status) +
+                        if (habit.freq is com.hanifedma.streak.core.Freq.Daily) ""
+                        else " · " + scheduleText(habit, lang, names)
                     else -> scheduleText(habit, lang, names)
                 }
                 Text(sub, color = c.muted, fontSize = 12.5.sp)
@@ -211,7 +232,7 @@ private fun TodayRow(
             }
             if (habit.type == HabitType.MEASURABLE && !skipped) {
                 Spacer(Modifier.height(6.dp))
-                ThinProgress(Habits.progressOf(habit, dayKey), hc)
+                ThinProgress(Habits.progressOf(habit, dayKey, todayKey), hc)
             }
         }
         Spacer(Modifier.width(10.dp))
@@ -240,6 +261,40 @@ private fun TodayRow(
                 }
                 Spacer(Modifier.width(4.dp))
                 StepButton("+") { onBump(1) }
+            }
+        } else if (avoid) {
+            // Kept is the resting state, so this button records a SLIP — and
+            // once a day is marked, pressing it again takes it back to kept.
+            // Drawn as an outline rather than a filled block: a solid badge
+            // would read as something just achieved, when in fact the day has
+            // only not been broken yet.
+            val marked = broke || skipped
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .background(if (broke) c.danger else c.surface, RoundedCornerShape(12.dp))
+                    .border(
+                        2.dp,
+                        if (broke) c.danger else hc,
+                        RoundedCornerShape(12.dp),
+                    )
+                    .clickable(
+                        onClickLabel = t(
+                            lang, if (marked) "cell.markKept" else "cell.markBroke",
+                        ),
+                        onClick = onToggle,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    if (skipped) "–" else if (broke) "✕" else "✓",
+                    color = when {
+                        broke -> Color.White
+                        skipped -> c.muted
+                        else -> hc
+                    },
+                    fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                )
             }
         } else {
             Box(

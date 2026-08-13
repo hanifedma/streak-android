@@ -132,9 +132,23 @@ fun CellSheet(
             Spacer(Modifier.height(12.dp))
         }
 
-        SheetAction("✔  " + t(lang, "cell.markDone")) { onSet(Habits.doneValue(habit)) }
+        val avoid = Habits.isAvoid(habit)
+        SheetAction("✔  " + t(lang, if (avoid) "cell.markKept" else "cell.markDone")) {
+            onSet(Habits.doneValue(habit))
+        }
+        // Only a yes/no avoid habit gets a one-tap "I slipped": a measurable
+        // one has no single number that counts as a breach, so it asks for the
+        // amount in the field above instead.
+        if (avoid && habit.type == HabitType.BINARY) {
+            SheetAction("✕  " + t(lang, "cell.markBroke"), danger = true) { onSet(Habits.BROKE) }
+        }
         SheetAction("–  " + t(lang, "cell.markSkip")) { onSet(Habits.SKIP) }
-        SheetAction("✕  " + t(lang, "cell.clear"), danger = true) { onSet(null) }
+        // On an avoid habit, clearing a day hands it back to "kept" — the good
+        // outcome — so it is neither dangerous nor another ✕ beside the slip.
+        SheetAction(
+            (if (avoid) "↺  " else "✕  ") + t(lang, "cell.clear"),
+            danger = !avoid,
+        ) { onSet(null) }
 
         Spacer(Modifier.height(8.dp))
         TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {

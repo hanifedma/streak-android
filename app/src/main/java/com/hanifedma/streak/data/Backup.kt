@@ -3,7 +3,9 @@ package com.hanifedma.streak.data
 import com.hanifedma.streak.core.Freq
 import com.hanifedma.streak.core.Habit
 import com.hanifedma.streak.core.HabitFactory
+import com.hanifedma.streak.core.HabitType
 import com.hanifedma.streak.core.Habits
+import com.hanifedma.streak.core.Polarity
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -70,6 +72,7 @@ object Backup {
         .put("name", h.name)
         .put("color", h.color)
         .put("type", h.type.wire)
+        .put("polarity", h.polarity.wire)
         .put("goalDir", h.goalDir.wire)
         .put("target", h.target)
         .put("unit", h.unit)
@@ -95,6 +98,7 @@ object Backup {
         name = o.optString("name"),
         color = o.stringOrNull("color"),
         type = o.stringOrNull("type"),
+        polarity = o.stringOrNull("polarity"),
         goalDir = o.stringOrNull("goalDir"),
         target = if (o.has("target")) o.optDouble("target", 1.0) else null,
         unit = o.stringOrNull("unit"),
@@ -173,25 +177,41 @@ object Backup {
         return MergeResult(ops, added, merged)
     }
 
-    /** A spreadsheet-friendly table: one row per habit per recorded day. */
+    /**
+     * A spreadsheet-friendly table: one row per habit per RECORDED day.
+     *
+     * Note what that means for an avoid habit: its kept days have nothing in
+     * the log, so the rows you get are the slips (and any day explicitly
+     * confirmed). That is the honest export of what was actually recorded \u2014
+     * the `kind` column is there so a reader knows which way round to read a
+     * sparse habit.
+     */
     fun toCsv(habits: List<Habit>): String {
         val sb = StringBuilder()
         // A BOM so Excel opens Korean habit names as UTF-8 instead of mojibake.
         // Written as an escape, not a literal: a raw BOM byte sitting in the
         // middle of a source file is invisible and trips tooling.
         sb.append('\uFEFF')
-        sb.append("habit,date,value,status,unit,target\r\n")
+        sb.append("habit,kind,date,value,status,unit,target\r\n")
         fun esc(s: String): String =
             if (s.any { it == '"' || it == ',' || it == '\n' }) "\"" + s.replace("\"", "\"\"") + "\"" else s
 
         for (h in habits) {
+            val avoid = h.polarity == Polarity.AVOID
             for (k in h.log.keys.sorted()) {
                 val v = h.log[k]!!
                 val skipped = v == Habits.SKIP
+                val status = when {
+                    skipped -> "skipped"
+                    h.type != HabitType.BINARY -> "logged"
+                    avoid -> if (v >= 1) "kept" else "broken"
+                    else -> "done"
+                }
                 sb.append(esc(h.name)).append(',')
+                    .append(if (avoid) "avoid" else "do").append(',')
                     .append(k).append(',')
                     .append(if (skipped) "" else trimNum(v)).append(',')
-                    .append(if (skipped) "skipped" else if (h.type.wire == "binary") "done" else "logged").append(',')
+                    .append(status).append(',')
                     .append(esc(h.unit)).append(',')
                     .append(trimNum(h.target)).append("\r\n")
             }

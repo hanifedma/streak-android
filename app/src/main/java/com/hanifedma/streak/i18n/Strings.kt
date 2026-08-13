@@ -1,5 +1,8 @@
 package com.hanifedma.streak.i18n
 
+import com.hanifedma.streak.core.DayStatus
+import com.hanifedma.streak.core.Habit
+import com.hanifedma.streak.core.Polarity
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -95,12 +98,27 @@ object Strings {
         "cell.clear" to "지우기",
         "cell.save" to "저장",
 
+        // Avoid habits read the other way round: an empty day is a success,
+        // and the thing you record is the day you slipped.
+        "cell.kept" to "지킴",
+        "cell.broke" to "어김",
+        "cell.keptFuture" to "아직 아님",
+        "cell.markKept" to "지킨 날로 표시",
+        "cell.markBroke" to "어긴 날로 표시",
+        "badge.avoid" to "피하기",
+
         // --- editor ---
         "editor.new" to "새 습관",
         "editor.edit" to "습관 수정",
         "editor.name" to "이름",
         "editor.namePh" to "예: 물 2리터 마시기",
+        "editor.namePhAvoid" to "예: 단 음식 안 먹기",
         "editor.color" to "색상",
+        "editor.polarity" to "방식",
+        "editor.polarity.do" to "실천하기",
+        "editor.polarity.avoid" to "피하기",
+        "editor.polarity.doHint" to "한 날에 체크하면 완료됩니다. 매일 ‘아니오’로 시작합니다.",
+        "editor.polarity.avoidHint" to "어기지 않은 날은 자동으로 성공입니다. 어긴 날만 표시하세요. 매일 ‘예’로 시작합니다.",
         "editor.type" to "유형",
         "editor.type.binary" to "예 / 아니오",
         "editor.type.measurable" to "측정형",
@@ -118,6 +136,7 @@ object Strings {
         "editor.pickDays" to "요일을 하나 이상 선택하세요.",
         "editor.start" to "시작일",
         "editor.startHint" to "시작일 이전 날짜는 미완료로 계산되지 않습니다.",
+        "editor.startHintAvoid" to "이 날짜부터 지켜온 것으로 계산됩니다. 예전에 끊은 날짜를 넣어도 됩니다.",
         "editor.save" to "저장",
         "editor.cancel" to "취소",
         "editor.delete" to "삭제",
@@ -132,6 +151,8 @@ object Strings {
         "stats.best" to "최고 연속",
         "stats.rate30" to "최근 30일",
         "stats.total" to "총 완료",
+        "stats.kept" to "지킨 날",
+        "stats.slips" to "어긴 날",
         "stats.unit.day" to "일",
         "stats.unit.week" to "주",
         "stats.unit.times" to "회",
@@ -274,11 +295,24 @@ object Strings {
         "cell.clear" to "Clear",
         "cell.save" to "Save",
 
+        "cell.kept" to "Kept",
+        "cell.broke" to "Slipped",
+        "cell.keptFuture" to "Not yet",
+        "cell.markKept" to "Mark as kept",
+        "cell.markBroke" to "Mark as slipped",
+        "badge.avoid" to "Avoid",
+
         "editor.new" to "New habit",
         "editor.edit" to "Edit habit",
         "editor.name" to "Name",
         "editor.namePh" to "e.g. Drink 2 litres of water",
+        "editor.namePhAvoid" to "e.g. No sweets",
         "editor.color" to "Colour",
+        "editor.polarity" to "Kind",
+        "editor.polarity.do" to "Do it",
+        "editor.polarity.avoid" to "Avoid it",
+        "editor.polarity.doHint" to "Tick the days you do it. Every day starts as “no”.",
+        "editor.polarity.avoidHint" to "Every day counts as kept on its own — mark only the days you slip. Every day starts as “yes”.",
         "editor.type" to "Type",
         "editor.type.binary" to "Yes / No",
         "editor.type.measurable" to "Measurable",
@@ -296,6 +330,7 @@ object Strings {
         "editor.pickDays" to "Pick at least one day.",
         "editor.start" to "Start date",
         "editor.startHint" to "Days before this are never counted as missed.",
+        "editor.startHintAvoid" to "Counted as kept from this date on — set it to the day you actually quit.",
         "editor.save" to "Save",
         "editor.cancel" to "Cancel",
         "editor.delete" to "Delete",
@@ -309,6 +344,8 @@ object Strings {
         "stats.best" to "Best streak",
         "stats.rate30" to "Last 30 days",
         "stats.total" to "Total done",
+        "stats.kept" to "Days kept",
+        "stats.slips" to "Slips",
         "stats.unit.day" to "days",
         "stats.unit.week" to "weeks",
         "stats.unit.times" to "times",
@@ -408,6 +445,26 @@ object Strings {
 
     /** The key a counted string resolves to, for callers that render later. */
     fun countKey(key: String, n: Int): String = if (n == 1) "$key.one" else key
+
+    /**
+     * The word for a day's status, in the habit's own vocabulary.
+     *
+     * An avoid habit succeeds by default, so "done" reads as *kept* and its
+     * failure is a *slip*, not a missed chore. Getting this wrong would have
+     * a clean day on "no cigarettes" announced as "Done", which is technically
+     * true and completely the wrong idea.
+     */
+    fun statusText(lang: Lang, habit: Habit, status: DayStatus): String {
+        if (habit.polarity == Polarity.AVOID) {
+            when (status) {
+                DayStatus.DONE -> return t(lang, "cell.kept")
+                DayStatus.MISS -> return t(lang, "cell.broke")
+                DayStatus.NONE -> return t(lang, "cell.keptFuture")
+                else -> Unit
+            }
+        }
+        return t(lang, "cell." + status.name.lowercase(Locale.ROOT))
+    }
 }
 
 /**

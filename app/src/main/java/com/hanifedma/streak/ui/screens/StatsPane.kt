@@ -77,13 +77,18 @@ fun StatsPane(
     var year by remember(habit.id) { mutableStateOf(start.get(Calendar.YEAR)) }
     var month by remember(habit.id) { mutableStateOf(start.get(Calendar.MONTH)) }
 
+    val avoid = Habits.isAvoid(habit)
     val streak = remember(habit, today, weekStart) { Habits.computeStreaks(habit, today, weekStart) }
     val c30 = remember(habit, today) {
-        Habits.completion(habit, Habits.shiftKey(today, -29), today)
+        Habits.completion(habit, Habits.shiftKey(today, -29), today, today)
     }
-    val total = remember(habit) { Habits.totalDone(habit) }
+    // For an avoid habit almost every day is a success, so counting them says
+    // very little — how many times it was broken is the number worth a tile.
+    val total = remember(habit, today) {
+        if (avoid) Habits.totalMissed(habit, today) else Habits.totalDone(habit, today)
+    }
     val wd = remember(habit, today) {
-        Habits.byWeekday(habit, Habits.shiftKey(today, -83), today) // 12 weeks
+        Habits.byWeekday(habit, Habits.shiftKey(today, -83), today, today) // 12 weeks
     }
 
     Column(
@@ -98,9 +103,24 @@ fun StatsPane(
             Spacer(Modifier.width(10.dp))
             Text(
                 habit.name,
+                modifier = Modifier.weight(1f, fill = false),
                 color = hc, fontSize = 20.sp, fontWeight = FontWeight.Bold,
                 maxLines = 2, overflow = TextOverflow.Ellipsis,
             )
+            // Says which way round to read the panel: on an avoid habit a full
+            // month of colour means nothing went wrong, not that something was
+            // done 31 times.
+            if (avoid) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    t(lang, "badge.avoid"),
+                    color = c.muted, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .background(c.surface2, RoundedCornerShape(999.dp))
+                        .border(1.dp, c.border, RoundedCornerShape(999.dp))
+                        .padding(horizontal = 9.dp, vertical = 3.dp),
+                )
+            }
         }
         Spacer(Modifier.height(6.dp))
         Text(
@@ -131,8 +151,12 @@ fun StatsPane(
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Tile("📈", t(lang, "stats.rate30"), "${(c30.rate * 100).toInt()}", "%", Modifier.weight(1f))
-            Tile("✔", t(lang, "stats.total"), total.toString(),
-                names.unitText(lang, "day", total), Modifier.weight(1f))
+            Tile(
+                if (avoid) "✕" else "✔",
+                t(lang, if (avoid) "stats.slips" else "stats.total"),
+                total.toString(),
+                names.unitText(lang, "day", total), Modifier.weight(1f),
+            )
         }
 
         Spacer(Modifier.height(22.dp))
@@ -227,7 +251,7 @@ private fun Tile(icon: String, label: String, value: String, unit: String, modif
 private fun CalendarCell(habit: Habit, key: String, today: String, hc: Color, names: DateNames) {
     val c = Streak.colors
     val future = Habits.diffDays(key, today) > 0
-    val status = if (future) null else Habits.statusOf(habit, key)
+    val status = if (future) null else Habits.statusOf(habit, key, today)
     val isToday = key == today
 
     val bg = when (status) {

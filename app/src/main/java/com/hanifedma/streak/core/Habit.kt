@@ -6,7 +6,7 @@ package com.hanifedma.streak.core
  *
  * Stored at /users/{uid}/habits/{id}:
  *
- *   { name, color, type, goalDir, target, unit, freq, startDate,
+ *   { name, color, type, polarity, goalDir, target, unit, freq, startDate,
  *     archived, order, log: { "2026-08-04": 1, "2026-08-03": -1 } }
  *
  * Keeping the daily entries in a `log` map on the habit's own document means
@@ -18,6 +18,14 @@ data class Habit(
     val name: String,
     val color: String = Habits.DEFAULT_COLOR,
     val type: HabitType = HabitType.BINARY,
+    /**
+     * Which way round the habit works, and therefore what an empty day means.
+     *
+     * [Polarity.DO] is the ordinary kind: nothing recorded = not done.
+     * [Polarity.AVOID] is "no sweets", "no cigarettes": nothing recorded =
+     * KEPT, and the thing you record is the day you slipped.
+     */
+    val polarity: Polarity = Polarity.DO,
     val goalDir: GoalDir = GoalDir.AT_LEAST,
     val target: Double = 1.0,
     val unit: String = "",
@@ -58,6 +66,16 @@ enum class GoalDir { AT_LEAST, AT_MOST;
     }
 }
 
+/** Build a habit, or break one. See [Habit.polarity]. */
+enum class Polarity { DO, AVOID;
+    val wire: String get() = if (this == AVOID) "avoid" else "do"
+    companion object {
+        // Anything that isn't exactly "avoid" is an ordinary habit, so a
+        // document written before this feature existed reads back unchanged.
+        fun from(s: String?) = if (s == "avoid") AVOID else DO
+    }
+}
+
 /** How often a habit is due. */
 sealed class Freq {
     object Daily : Freq()
@@ -72,11 +90,12 @@ enum class DayStatus {
     PRESTART,
     /** Deliberately skipped; transparent to streaks. */
     SKIP,
-    /** Goal met. */
+    /** Goal met — for an avoid habit, the day was kept. */
     DONE,
     /** Some progress, goal not met (measurable, at-least). */
     PARTIAL,
-    /** An explicit failure (measurable, at-most, over the limit). */
+    /** An explicit failure: over an at-most limit, or the day an avoid habit
+     *  was broken. */
     MISS,
     /** Not due today; transparent to streaks. */
     UNSCHEDULED,
@@ -113,6 +132,7 @@ object HabitFactory {
         name: String?,
         color: String? = null,
         type: String? = null,
+        polarity: String? = null,
         goalDir: String? = null,
         target: Double? = null,
         unit: String? = null,
@@ -124,7 +144,13 @@ object HabitFactory {
         log: Map<String, Double>? = null,
     ): Habit {
         val t = HabitType.from(type)
-        val dir = GoalDir.from(goalDir)
+        val pol = Polarity.from(polarity)
+
+        // "Avoid at least 30 minutes of screen time" is a contradiction: an
+        // avoid habit succeeds by staying under something, never by reaching
+        // it. Binary habits ignore goalDir, so only measurable ones are pinned.
+        var dir = GoalDir.from(goalDir)
+        if (pol == Polarity.AVOID && t == HabitType.MEASURABLE) dir = GoalDir.AT_MOST
 
         var tgt = target ?: 1.0
         if (!tgt.isFinite() || tgt < 0) tgt = 1.0
@@ -132,6 +158,12 @@ object HabitFactory {
         // "at least 0" would be satisfied by doing nothing, which makes streaks
         // meaningless — lift it to the smallest goal that can actually be missed.
         if (t == HabitType.MEASURABLE && dir == GoalDir.AT_LEAST && tgt <= 0) tgt = 1.0
+
+        // "3 times a week" counts the occasions you DID something. An avoid
+        // habit has none to count — every scheduled day is kept or broken — so
+        // a weekly quota would be met by every week that ever existed.
+        var frequency = normalizeFreq(freq)
+        if (pol == Polarity.AVOID && frequency is Freq.Weekly) frequency = Freq.Daily
 
         val cleanLog = sanitizeLog(log)
         val start = if (Habits.isKey(startDate)) startDate!! else Habits.todayKey()
@@ -146,10 +178,11 @@ object HabitFactory {
             name = (name ?: "").take(Habits.MAX_NAME_LEN),
             color = if (color != null && Habits.COLORS.contains(color)) color else Habits.DEFAULT_COLOR,
             type = t,
+            polarity = pol,
             goalDir = dir,
             target = tgt,
             unit = (unit ?: "").take(Habits.MAX_UNIT_LEN),
-            freq = normalizeFreq(freq),
+            freq = frequency,
             startDate = start,
             firstDay = firstDay,
             archived = archived,

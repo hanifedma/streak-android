@@ -23,10 +23,26 @@ import java.util.Locale
  *        null      → no entry at all
  *        SKIP (-1) → deliberately skipped (doesn't count, doesn't break)
  *        0 … n     → the recorded amount (1 = "done" for yes/no habits)
+ *
+ *  3. A habit has a POLARITY, and it decides what "nothing recorded" means:
+ *        DO    → the ordinary kind. Nothing recorded = not done.
+ *        AVOID → "no sweets", "no cigarettes". Nothing recorded = KEPT. You
+ *                only ever record the days you slipped, so a recorded 0 is
+ *                the failure and an empty day is the success.
+ *     That inversion is why several functions here take a `todayK`: a day
+ *     that has not happened yet cannot have been kept, so the "empty means
+ *     kept" rule has to stop at today rather than paint the rest of the month
+ *     green. It is nullable, and only resolved against the clock when an
+ *     avoid habit actually needs it — the grid asks for a status hundreds of
+ *     times per frame and Calendar.getInstance() is not free.
  */
 object Habits {
 
     const val SKIP = -1.0
+
+    /** What a tap records when an avoid habit gets broken. A real 0, not a
+     *  cleared day: "I ate sweets today" and "I haven't said" differ. */
+    const val BROKE = 0.0
 
     /** Habit colours. Each name maps to a colour pair in the theme. */
     val COLORS = listOf(
@@ -171,16 +187,36 @@ object Habits {
 
     fun entryOf(habit: Habit, key: String): Double? = habit.log[key]
 
-    fun statusOf(habit: Habit, key: String): DayStatus {
+    /** Is this one of the "don't do it" habits, kept by default? */
+    fun isAvoid(habit: Habit): Boolean = habit.polarity == Polarity.AVOID
+
+    fun statusOf(habit: Habit, key: String, todayK: String? = null): DayStatus {
         val v = entryOf(habit, key)
         if (v == SKIP) return DayStatus.SKIP
-        // Days before the habit began are never held against it — but that
-        // means its EFFECTIVE start (see Habit.firstDay), not its start date,
-        // or gaps in back-filled history would silently vanish from streaks.
-        if (v == null && diffDays(key, habit.firstDay) < 0) return DayStatus.PRESTART
-        if (v == null) return if (isScheduled(habit, key)) DayStatus.NONE else DayStatus.UNSCHEDULED
 
-        if (habit.type == HabitType.BINARY) return if (v >= 1) DayStatus.DONE else DayStatus.NONE
+        if (v == null) {
+            // Days before the habit began are never held against it — but that
+            // means its EFFECTIVE start (see Habit.firstDay), not its start
+            // date, or gaps in back-filled history would vanish from streaks.
+            if (diffDays(key, habit.firstDay) < 0) return DayStatus.PRESTART
+            if (!isScheduled(habit, key)) return DayStatus.UNSCHEDULED
+            if (habit.polarity != Polarity.AVOID) return DayStatus.NONE
+            // An avoid habit is kept until you say otherwise — but a day that
+            // hasn't happened yet has not been kept, and marking it done would
+            // fill the calendar with successes nobody earned. Day keys are
+            // zero-padded, so comparing them as strings is chronological.
+            return if (key <= (todayK ?: todayKey())) DayStatus.DONE else DayStatus.NONE
+        }
+
+        if (habit.type == HabitType.BINARY) {
+            // For an avoid habit a recorded 0 is the entire point: it is the
+            // day you slipped, and it has to break the streak. For an ordinary
+            // habit the same 0 only means "nothing done yet".
+            if (habit.polarity == Polarity.AVOID) {
+                return if (v >= 1) DayStatus.DONE else DayStatus.MISS
+            }
+            return if (v >= 1) DayStatus.DONE else DayStatus.NONE
+        }
         if (habit.goalDir == GoalDir.AT_MOST) {
             return if (v <= habit.target) DayStatus.DONE else DayStatus.MISS
         }
@@ -189,18 +225,39 @@ object Habits {
     }
 
     /** 0…1 — how far through the day's goal. Drives partial fills. */
-    fun progressOf(habit: Habit, key: String): Float {
-        val v = entryOf(habit, key) ?: return 0f
+    fun progressOf(habit: Habit, key: String, todayK: String? = null): Float {
+        val v = entryOf(habit, key)
         if (v == SKIP) return 0f
+        // A kept day on an avoid habit has no recorded amount, but it is done.
+        if (v == null) return if (statusOf(habit, key, todayK) == DayStatus.DONE) 1f else 0f
         if (habit.type == HabitType.BINARY) return if (v >= 1) 1f else 0f
         if (habit.goalDir == GoalDir.AT_MOST) return if (v <= habit.target) 1f else 0f
         if (habit.target <= 0) return 1f
         return (v / habit.target).coerceIn(0.0, 1.0).toFloat()
     }
 
-    /** The value a single tap should record. */
+    /** The value that marks a day as a success. */
     fun doneValue(habit: Habit): Double =
         if (habit.type == HabitType.BINARY) 1.0 else habit.target
+
+    /**
+     * What one tap on a day should write, or null to clear it.
+     *
+     * The whole inversion for avoid habits lives here, so the grid, the Today
+     * list and the home-screen widget cannot drift apart on what a tap means:
+     * kept is the resting state, so a tap records a slip, and a tap on a day
+     * already marked puts it back to kept.
+     *
+     * Measurable habits are never toggled — they need a real amount, so their
+     * UI asks for one — and so always take the ordinary path.
+     */
+    fun toggleValue(habit: Habit, key: String, todayK: String? = null): Double? {
+        val st = statusOf(habit, key, todayK)
+        if (habit.polarity == Polarity.AVOID && habit.type == HabitType.BINARY) {
+            return if (st == DayStatus.MISS || st == DayStatus.SKIP) null else BROKE
+        }
+        return if (st == DayStatus.DONE || st == DayStatus.SKIP) null else doneValue(habit)
+    }
 
     /** Step size for the +/- buttons on a measurable habit. */
     fun stepOf(habit: Habit): Double =
@@ -242,7 +299,7 @@ object Habits {
         var best = 0
         var run = 0
         for (key in keys) {
-            when (statusOf(habit, key)) {
+            when (statusOf(habit, key, todayK)) {
                 DayStatus.DONE -> { run++; if (run > best) best = run }
                 DayStatus.SKIP, DayStatus.UNSCHEDULED, DayStatus.PRESTART -> Unit // transparent
                 else -> run = 0
@@ -252,7 +309,7 @@ object Habits {
         var current = 0
         for (i in keys.indices.reversed()) {
             val key = keys[i]
-            val st = statusOf(habit, key)
+            val st = statusOf(habit, key, todayK)
             if (st == DayStatus.DONE) { current++; continue }
             if (st == DayStatus.SKIP || st == DayStatus.UNSCHEDULED || st == DayStatus.PRESTART) continue
             // "none"/"partial" on today = still in progress, not a break.
@@ -276,7 +333,7 @@ object Habits {
         for (w in 0..weeks) {
             val wk = shiftKey(firstWeek, w * 7)
             var done = 0
-            for (d in 0..6) if (statusOf(habit, shiftKey(wk, d)) == DayStatus.DONE) done++
+            for (d in 0..6) if (statusOf(habit, shiftKey(wk, d), todayK) == DayStatus.DONE) done++
             filled.add(done >= times)
         }
 
@@ -307,19 +364,25 @@ object Habits {
      *   expected → scheduled days, minus skips, minus days before the start
      * Weekly-count habits are measured against times × whole-weeks-in-range.
      */
-    fun completion(habit: Habit, fromKey: String, toKey: String): Completion {
+    fun completion(
+        habit: Habit,
+        fromKey: String,
+        toKey: String,
+        todayK: String? = null,
+    ): Completion {
         // Effective start, so back-filled history is measured rather than ignored.
         val startK = habit.firstDay
         val from = if (diffDays(fromKey, startK) < 0) startK else fromKey
         if (diffDays(toKey, from) < 0) return Completion(0, 0, 0f)
 
+        val tk = todayK ?: todayKey()
         val keys = rangeKeys(from, toKey)
         var done = 0
         var expected = 0
         var skipped = 0
 
         for (key in keys) {
-            when (statusOf(habit, key)) {
+            when (statusOf(habit, key, tk)) {
                 DayStatus.DONE -> { done++; expected++ }
                 DayStatus.SKIP -> skipped++
                 DayStatus.PRESTART, DayStatus.UNSCHEDULED -> Unit
@@ -341,11 +404,32 @@ object Habits {
 
     /** Rolling score used for the ring beside each habit name. */
     fun score(habit: Habit, todayK: String, days: Int = 30): Float =
-        completion(habit, shiftKey(todayK, -(days - 1)), todayK).rate
+        completion(habit, shiftKey(todayK, -(days - 1)), todayK, todayK).rate
 
-    /** Total number of days this habit was completed, over its whole history. */
-    fun totalDone(habit: Habit): Int =
-        habit.log.keys.count { statusOf(habit, it) == DayStatus.DONE }
+    /**
+     * Total number of days this habit was completed, over its whole history.
+     *
+     * The ordinary kind can only be "done" on a day it has an entry for, so
+     * its log is the whole story and scanning it is cheap. An avoid habit is
+     * kept on days it has no entry for at all, so those have to be counted by
+     * walking the calendar instead.
+     */
+    fun totalDone(habit: Habit, todayK: String? = null): Int {
+        val tk = todayK ?: todayKey()
+        if (habit.polarity == Polarity.AVOID) return countStatus(habit, tk, DayStatus.DONE)
+        return habit.log.keys.count { statusOf(habit, it, tk) == DayStatus.DONE }
+    }
+
+    /** How many days this habit was broken. The headline number for an avoid
+     *  habit, where every other day is a success by default. */
+    fun totalMissed(habit: Habit, todayK: String? = null): Int =
+        countStatus(habit, todayK ?: todayKey(), DayStatus.MISS)
+
+    /** Days between the habit's effective start and today with a given status. */
+    private fun countStatus(habit: Habit, todayK: String, want: DayStatus): Int {
+        if (diffDays(todayK, habit.firstDay) < 0) return 0
+        return rangeKeys(habit.firstDay, todayK).count { statusOf(habit, it, todayK) == want }
+    }
 
     /** Sum of recorded amounts over an inclusive range. */
     fun totalValue(habit: Habit, fromKey: String?, toKey: String?): Double {
@@ -360,15 +444,21 @@ object Habits {
     }
 
     /** Per-weekday completion, index 0 = Sunday. */
-    fun byWeekday(habit: Habit, fromKey: String, toKey: String): WeekdayStats {
+    fun byWeekday(
+        habit: Habit,
+        fromKey: String,
+        toKey: String,
+        todayK: String? = null,
+    ): WeekdayStats {
         val done = IntArray(7)
         val expected = IntArray(7)
         val start = habit.firstDay
         val from = if (diffDays(fromKey, start) < 0) start else fromKey
         if (diffDays(toKey, from) < 0) return WeekdayStats(done, expected)
 
+        val tk = todayK ?: todayKey()
         for (key in rangeKeys(from, toKey)) {
-            val st = statusOf(habit, key)
+            val st = statusOf(habit, key, tk)
             val d = dowOf(key)
             if (st == DayStatus.DONE) done[d]++
             if (st == DayStatus.SKIP || st == DayStatus.PRESTART || st == DayStatus.UNSCHEDULED) continue
@@ -381,13 +471,20 @@ object Habits {
     //  Aggregates across all habits
     // ------------------------------------------------------------
 
-    /** How many habits are due on `key`, and how many of those are done. */
-    fun dayProgress(habits: List<Habit>, key: String): DayProgress {
+    /**
+     * How many habits are due on `key`, and how many of those are done.
+     *
+     * An avoid habit counts as done from the moment the day starts, because
+     * that is exactly what it claims: kept until you say otherwise. It drops
+     * back out of "done" the moment you record a slip.
+     */
+    fun dayProgress(habits: List<Habit>, key: String, todayK: String? = null): DayProgress {
+        val tk = todayK ?: todayKey()
         var due = 0
         var done = 0
         for (h in habits) {
             if (h.archived) continue
-            when (statusOf(h, key)) {
+            when (statusOf(h, key, tk)) {
                 DayStatus.DONE -> { due++; done++ }
                 DayStatus.NONE, DayStatus.PARTIAL, DayStatus.MISS -> due++
                 else -> Unit
@@ -397,10 +494,13 @@ object Habits {
     }
 
     /** Habits due on `key`, in display order (skipped and done still listed). */
-    fun dueOn(habits: List<Habit>, key: String): List<Habit> = habits.filter {
-        if (it.archived) return@filter false
-        val st = statusOf(it, key)
-        st != DayStatus.PRESTART && st != DayStatus.UNSCHEDULED
+    fun dueOn(habits: List<Habit>, key: String, todayK: String? = null): List<Habit> {
+        val tk = todayK ?: todayKey()
+        return habits.filter {
+            if (it.archived) return@filter false
+            val st = statusOf(it, key, tk)
+            st != DayStatus.PRESTART && st != DayStatus.UNSCHEDULED
+        }
     }
 
     fun sortHabits(habits: List<Habit>): List<Habit> =

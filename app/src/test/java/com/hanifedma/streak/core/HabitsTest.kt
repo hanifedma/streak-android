@@ -378,6 +378,147 @@ class HabitsTest {
     }
 
     // ----------------------------------------------------------
+    //  avoid habits
+    // ----------------------------------------------------------
+    // "Don't eat sweets": kept unless you say otherwise, so an empty day is a
+    // success and a recorded 0 is the failure. Each of these is the mirror
+    // image of one in "day status" / "streaks — daily" above, and of the same
+    // assertion in the web app's tests.js.
+
+    private fun av(
+        startDate: String? = "2026-01-01",
+        type: String? = null,
+        goalDir: String? = null,
+        target: Double? = null,
+        freq: Freq? = null,
+        log: Map<String, Double> = emptyMap(),
+    ) = HabitFactory.normalize(
+        id = "t", name = "Avoid", polarity = "avoid", type = type, goalDir = goalDir,
+        target = target, freq = freq, startDate = startDate, log = log,
+    )
+
+    private val clean = av()
+    private val slipped = av(log = mapOf("2026-01-07" to Habits.BROKE))
+
+    @Test fun polarityDefaultsToDoAndFallsBack() {
+        assertEquals(Polarity.DO, mk().polarity)
+        assertEquals(Polarity.DO, HabitFactory.normalize(
+            id = "t", name = "x", polarity = "nope", startDate = "2026-01-01").polarity)
+        assertEquals(Polarity.AVOID, clean.polarity)
+        assertTrue(Habits.isAvoid(clean) && !Habits.isAvoid(mk()))
+    }
+
+    @Test fun anEmptyDayIsKeptNotMissed() {
+        assertEquals(DayStatus.DONE, Habits.statusOf(clean, "2026-01-05", today))
+        assertEquals(DayStatus.DONE, Habits.statusOf(clean, today, today))
+    }
+
+    /** The one that would otherwise paint the whole month green. */
+    @Test fun tomorrowHasNotBeenKeptYet() = assertEquals(
+        DayStatus.NONE, Habits.statusOf(clean, Habits.shiftKey(today, 1), today),
+    )
+
+    @Test fun daysBeforeItStartedAreStillPrestart() = assertEquals(
+        DayStatus.PRESTART, Habits.statusOf(clean, "2025-12-25", today),
+    )
+
+    @Test fun aRecordedZeroIsTheDayItWasBroken() {
+        assertEquals(DayStatus.MISS, Habits.statusOf(slipped, "2026-01-07", today))
+        assertEquals(0.0, Habits.BROKE, 0.0)
+        assertEquals(DayStatus.DONE,
+            Habits.statusOf(av(log = mapOf("2026-01-07" to 1.0)), "2026-01-07", today))
+        assertEquals(DayStatus.SKIP,
+            Habits.statusOf(av(log = mapOf("2026-01-07" to Habits.SKIP)), "2026-01-07", today))
+    }
+
+    /** The bug this inversion exists to avoid: on an ordinary habit the same
+     *  0 must stay "not done yet" and never become a failure. */
+    @Test fun aZeroOnAnOrdinaryHabitIsNotAMiss() = assertEquals(
+        DayStatus.NONE, Habits.statusOf(mk(log = mapOf("2026-01-07" to 0.0)), "2026-01-07", today),
+    )
+
+    @Test fun keptDaysAreFullProgress() {
+        assertEquals(1f, Habits.progressOf(clean, "2026-01-05", today), 0.0001f)
+        assertEquals(0f, Habits.progressOf(slipped, "2026-01-07", today), 0.0001f)
+    }
+
+    @Test fun everyDaySinceTheStartCounts() =
+        assertEquals(10, Habits.computeStreaks(clean, today).current)
+
+    @Test fun aSlipBreaksItAndTheRunBeforeIsRemembered() {
+        assertEquals(3, Habits.computeStreaks(slipped, today).current) // 8th–10th
+        assertEquals(6, Habits.computeStreaks(slipped, today).best)    // 1st–6th
+    }
+
+    @Test fun aSlipTodayBreaksTheStreakNow() = assertEquals(
+        0, Habits.computeStreaks(av(log = mapOf("2026-01-10" to Habits.BROKE)), today).current,
+    )
+
+    /** Transparent, not free: the skipped day neither breaks the run nor adds
+     *  to it, so ten days with one skipped in the middle count as nine. */
+    @Test fun aSkipStaysTransparentForAvoidHabits() = assertEquals(
+        9, Habits.computeStreaks(av(log = mapOf("2026-01-05" to Habits.SKIP)), today).current,
+    )
+
+    /** The quit-date case: moving the start date back claims the clean history
+     *  it describes, which is the whole point of "I stopped on this date". */
+    @Test fun anEarlierStartDateExtendsTheCleanRun() = assertEquals(
+        41, Habits.computeStreaks(av(startDate = "2025-12-01"), today).current,
+    )
+
+    @Test fun offDaysAreUnscheduledNotFreeWins() {
+        val h = av(freq = Freq.Weekdays(listOf(1, 3, 5)))
+        assertEquals(DayStatus.UNSCHEDULED, Habits.statusOf(h, "2026-01-06", today)) // Tuesday
+        assertEquals(DayStatus.DONE, Habits.statusOf(h, "2026-01-05", today))        // Monday
+    }
+
+    /** A weekly quota would be met by every week that ever existed, and
+     *  "avoid at least 30 minutes" is a contradiction. */
+    @Test fun impossibleCombinationsAreRewritten() {
+        assertEquals(Freq.Daily, av(freq = Freq.Weekly(3)).freq)
+        assertEquals(GoalDir.AT_MOST,
+            av(type = "measurable", goalDir = "at_least", target = 2.0).goalDir)
+        assertEquals(0.0,
+            av(type = "measurable", goalDir = "at_least", target = 0.0).target, 0.0)
+        // An ordinary measurable habit keeps its direction.
+        assertEquals(GoalDir.AT_LEAST,
+            mk(type = "measurable", goalDir = "at_least", target = 2.0).goalDir)
+    }
+
+    @Test fun oneTapGoesKeptToSlippedAndBack() {
+        assertEquals(Habits.BROKE, Habits.toggleValue(clean, today, today))
+        assertEquals(null, Habits.toggleValue(slipped, "2026-01-07", today))
+        assertEquals(null, Habits.toggleValue(
+            av(log = mapOf("2026-01-07" to Habits.SKIP)), "2026-01-07", today))
+        // An ordinary habit still ticks itself done, and unticks.
+        assertEquals(1.0, Habits.toggleValue(mk(), today, today))
+        assertEquals(null, Habits.toggleValue(mk(log = mapOf(today to 1.0)), today, today))
+    }
+
+    @Test fun successesAreCountedFromTheCalendarAndSlipsFromTheLog() {
+        assertEquals(10, Habits.totalDone(clean, today))
+        assertEquals(1, Habits.totalMissed(slipped, today))
+        assertEquals(0, Habits.totalMissed(clean, today))
+    }
+
+    @Test fun completionExpectsEveryDaySinceTheStart() {
+        val c = Habits.completion(slipped, "2026-01-01", today, today)
+        assertEquals(10, c.expected)
+        assertEquals(9, c.done)
+    }
+
+    /** The day's ring: an avoid habit is done from the moment it starts, and
+     *  drops back out the moment a slip is recorded. */
+    @Test fun avoidHabitsCountTowardsTheDaysProgress() {
+        val list = listOf(av(), mk(name = "ordinary"))
+        assertEquals(1, Habits.dayProgress(list, today, today).done)
+        assertEquals(2, Habits.dayProgress(list, today, today).due)
+        assertEquals(2, Habits.dueOn(list, today, today).size)
+        assertEquals(0, Habits.dayProgress(
+            listOf(av(log = mapOf("2026-01-10" to Habits.BROKE))), today, today).done)
+    }
+
+    // ----------------------------------------------------------
     //  streaks — weekly count
     // ----------------------------------------------------------
     // Sunday-start weeks. 2026-01-04 is a Sunday, so the week of the 4th runs

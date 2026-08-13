@@ -102,8 +102,8 @@ class HabitWidget : GlanceAppWidget() {
         val colors = if (prefs.dark) DarkStreakColors else LightStreakColors
         val lang = prefs.lang
         val today = Habits.todayKey()
-        val due = Habits.dueOn(habits.filter { !it.archived }, today)
-        val progress = Habits.dayProgress(habits, today)
+        val due = Habits.dueOn(habits.filter { !it.archived }, today, today)
+        val progress = Habits.dayProgress(habits, today, today)
         val height = LocalSize.current.height
 
         GlanceTheme {
@@ -174,9 +174,11 @@ class HabitWidget : GlanceAppWidget() {
         colors: com.hanifedma.streak.ui.theme.StreakColors,
         compact: Boolean,
     ) {
-        val status = Habits.statusOf(habit, today)
+        val status = Habits.statusOf(habit, today, today)
         val done = status == DayStatus.DONE
         val skipped = status == DayStatus.SKIP
+        val avoid = Habits.isAvoid(habit)
+        val broke = status == DayStatus.MISS
         val hc = colors.habit(habit.color)
 
         Row(
@@ -195,20 +197,40 @@ class HabitWidget : GlanceAppWidget() {
                 ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // An avoid habit arrives already kept, so its box is an outline
+            // rather than a filled block — a solid tick on the home screen
+            // would read as something just achieved. A slip is filled red,
+            // which is the one state worth spotting from across the room.
             Box(
                 GlanceModifier
                     .size(22.dp)
                     .cornerRadius(7.dp)
                     .background(
-                        if (done) hc else colors.surface2
+                        when {
+                            broke -> colors.danger
+                            done && avoid -> colors.surface
+                            done -> hc
+                            else -> colors.surface2
+                        }
                     ),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    if (done) "✔" else if (skipped) "–" else "",
+                    when {
+                        broke -> "✕"
+                        skipped -> "–"
+                        done && avoid -> "✓"
+                        done -> "✔"
+                        else -> ""
+                    },
                     style = TextStyle(
                         color = ColorProvider(
-                            if (done) colors.bg else colors.muted
+                            when {
+                                broke -> Color.White
+                                done && avoid -> hc
+                                done -> colors.bg
+                                else -> colors.muted
+                            }
                         ),
                         fontSize = 13.sp, fontWeight = FontWeight.Bold,
                     ),

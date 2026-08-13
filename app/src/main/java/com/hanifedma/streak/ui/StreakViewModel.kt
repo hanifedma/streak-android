@@ -316,11 +316,10 @@ class StreakViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleEntry(habitId: String, dayKey: String) {
         val h = habitById(habitId) ?: return
-        when (Habits.statusOf(h, dayKey)) {
-            com.hanifedma.streak.core.DayStatus.DONE,
-            com.hanifedma.streak.core.DayStatus.SKIP -> setEntry(habitId, dayKey, null)
-            else -> setEntry(habitId, dayKey, Habits.doneValue(h))
-        }
+        // What a tap means is a domain rule, not a UI one — an avoid habit
+        // records a slip where an ordinary one records a completion. See
+        // Habits.toggleValue, shared with the grid and the home-screen widget.
+        setEntry(habitId, dayKey, Habits.toggleValue(h, dayKey, _state.value.today))
     }
 
     fun bumpValue(habitId: String, dayKey: String, delta: Int) {

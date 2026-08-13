@@ -45,6 +45,7 @@ import com.hanifedma.streak.core.Habit
 import com.hanifedma.streak.core.HabitFactory
 import com.hanifedma.streak.core.HabitType
 import com.hanifedma.streak.core.Habits
+import com.hanifedma.streak.core.Polarity
 import com.hanifedma.streak.i18n.DateNames
 import com.hanifedma.streak.i18n.Lang
 import com.hanifedma.streak.i18n.Strings.t
@@ -75,6 +76,7 @@ fun EditorSheet(
     var name by remember { mutableStateOf(initial.name) }
     var color by remember { mutableStateOf(initial.color) }
     var type by remember { mutableStateOf(initial.type) }
+    var polarity by remember { mutableStateOf(initial.polarity) }
     var goalDir by remember { mutableStateOf(initial.goalDir) }
     var target by remember { mutableStateOf(trimNumber(initial.target)) }
     var unit by remember { mutableStateOf(initial.unit) }
@@ -96,6 +98,8 @@ fun EditorSheet(
     var startDate by remember { mutableStateOf(initial.startDate) }
     var error by remember { mutableStateOf<String?>(null) }
 
+    val avoid = polarity == Polarity.AVOID
+
     Column(
         Modifier
             .fillMaxWidth()
@@ -113,7 +117,9 @@ fun EditorSheet(
         OutlinedTextField(
             value = name,
             onValueChange = { if (it.length <= Habits.MAX_NAME_LEN) name = it },
-            placeholder = { Text(t(lang, "editor.namePh"), color = c.faint) },
+            placeholder = {
+                Text(t(lang, if (avoid) "editor.namePhAvoid" else "editor.namePh"), color = c.faint)
+            },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -141,6 +147,33 @@ fun EditorSheet(
             }
         }
 
+        // Which way round the habit works comes before how it is measured: it
+        // changes what every control below it means.
+        Spacer(Modifier.height(16.dp))
+        SectionLabel(t(lang, "editor.polarity"))
+        SegmentedRow(
+            options = listOf(
+                Polarity.DO to t(lang, "editor.polarity.do"),
+                Polarity.AVOID to t(lang, "editor.polarity.avoid"),
+            ),
+            selected = polarity,
+            onSelect = { picked ->
+                polarity = picked
+                // Keep the form out of any state the domain layer would
+                // silently rewrite on save: an avoid habit is always a
+                // ceiling, and never a weekly quota.
+                if (picked == Polarity.AVOID) {
+                    goalDir = GoalDir.AT_MOST
+                    if (freqKind == "weekly") freqKind = "daily"
+                }
+            },
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            t(lang, if (avoid) "editor.polarity.avoidHint" else "editor.polarity.doHint"),
+            color = c.muted, fontSize = 12.sp, lineHeight = 16.sp,
+        )
+
         Spacer(Modifier.height(16.dp))
         SectionLabel(t(lang, "editor.type"))
         SegmentedRow(
@@ -155,14 +188,30 @@ fun EditorSheet(
         if (type == HabitType.MEASURABLE) {
             Spacer(Modifier.height(16.dp))
             SectionLabel(t(lang, "editor.goal"))
-            SegmentedRow(
-                options = listOf(
-                    GoalDir.AT_LEAST to t(lang, "editor.goal.at_least"),
-                    GoalDir.AT_MOST to t(lang, "editor.goal.at_most"),
-                ),
-                selected = goalDir,
-                onSelect = { goalDir = it },
-            )
+            if (avoid) {
+                // Shown, not offered — there is no other direction an avoid
+                // habit could have, and a dead segmented control invites taps
+                // that do nothing.
+                Text(
+                    t(lang, "editor.goal.at_most"),
+                    color = c.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(c.surface2, RoundedCornerShape(11.dp))
+                        .border(1.dp, c.border, RoundedCornerShape(11.dp))
+                        .padding(horizontal = 12.dp, vertical = 13.dp),
+                    textAlign = TextAlign.Center,
+                )
+            } else {
+                SegmentedRow(
+                    options = listOf(
+                        GoalDir.AT_LEAST to t(lang, "editor.goal.at_least"),
+                        GoalDir.AT_MOST to t(lang, "editor.goal.at_most"),
+                    ),
+                    selected = goalDir,
+                    onSelect = { goalDir = it },
+                )
+            }
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -187,11 +236,13 @@ fun EditorSheet(
         Spacer(Modifier.height(16.dp))
         SectionLabel(t(lang, "editor.freq"))
         SegmentedRow(
-            options = listOf(
-                "daily" to t(lang, "editor.freq.daily"),
-                "weekdays" to t(lang, "editor.freq.weekdays"),
-                "weekly" to t(lang, "editor.freq.weeklyLabel"),
-            ),
+            // "3 times a week" counts occasions you did something, and an
+            // avoid habit has none to count — so it isn't offered one.
+            options = buildList {
+                add("daily" to t(lang, "editor.freq.daily"))
+                add("weekdays" to t(lang, "editor.freq.weekdays"))
+                if (!avoid) add("weekly" to t(lang, "editor.freq.weeklyLabel"))
+            },
             selected = freqKind,
             onSelect = { freqKind = it },
         )
@@ -258,7 +309,10 @@ fun EditorSheet(
             onChange = { startDate = it },
         )
         Spacer(Modifier.height(4.dp))
-        Text(t(lang, "editor.startHint"), color = c.muted, fontSize = 12.sp)
+        Text(
+            t(lang, if (avoid) "editor.startHintAvoid" else "editor.startHint"),
+            color = c.muted, fontSize = 12.sp, lineHeight = 16.sp,
+        )
 
         if (error != null) {
             Spacer(Modifier.height(12.dp))
@@ -313,6 +367,7 @@ fun EditorSheet(
                             name = trimmed,
                             color = color,
                             type = type.wire,
+                            polarity = polarity.wire,
                             goalDir = goalDir.wire,
                             target = if (type == HabitType.MEASURABLE)
                                 target.toDoubleOrNull() ?: 1.0 else 1.0,

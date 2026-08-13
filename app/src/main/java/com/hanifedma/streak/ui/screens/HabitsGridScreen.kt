@@ -47,6 +47,7 @@ import com.hanifedma.streak.core.HabitType
 import com.hanifedma.streak.core.Habits
 import com.hanifedma.streak.i18n.DateNames
 import com.hanifedma.streak.i18n.Lang
+import com.hanifedma.streak.i18n.Strings
 import com.hanifedma.streak.i18n.Strings.t
 import com.hanifedma.streak.ui.UiState
 import com.hanifedma.streak.ui.components.EmptyState
@@ -167,7 +168,7 @@ fun HabitsGridScreen(
                                 cellW = cellW, rowH = rowH, nameW = nameW,
                                 cellPx = cellPx, hScroll = hScroll,
                                 today = state.today, weekStart = state.weekStart,
-                                names = names,
+                                names = names, lang = lang,
                                 onToggle = { key -> onToggle(habit.id, key) },
                                 onLongPress = { key -> onCellLongPress(habit, key) },
                                 onOpenStats = { onOpenStats(habit.id) },
@@ -235,6 +236,7 @@ private fun GridRow(
     today: String,
     weekStart: Int,
     names: DateNames,
+    lang: Lang,
     onToggle: (String) -> Unit,
     onLongPress: (String) -> Unit,
     onOpenStats: () -> Unit,
@@ -279,7 +281,7 @@ private fun GridRow(
             Spacer(Modifier.width(with(density) { (window.first * cellPx).toDp() }))
             for (i in window) {
                 val key = days[i]
-                GridCell(habit, key, cellW, rowH, hc, names, onToggle, onLongPress)
+                GridCell(habit, key, today, cellW, rowH, hc, names, lang, onToggle, onLongPress)
             }
             Spacer(Modifier.width(with(density) {
                 ((days.size - window.last - 1) * cellPx).toDp()
@@ -294,30 +296,41 @@ private fun GridRow(
 private fun GridCell(
     habit: Habit,
     key: String,
+    today: String,
     cellW: Dp,
     rowH: Dp,
     hc: androidx.compose.ui.graphics.Color,
     names: DateNames,
+    lang: Lang,
     onToggle: (String) -> Unit,
     onLongPress: (String) -> Unit,
 ) {
     val c = Streak.colors
-    val status = Habits.statusOf(habit, key)
+    val status = Habits.statusOf(habit, key, today)
     val value = Habits.entryOf(habit, key)
+    val avoid = Habits.isAvoid(habit)
 
+    // An avoid habit's row is a wall of kept days with the occasional slip in
+    // it. Drawing those keeps as loudly as a completed chore buries the one
+    // cell that actually carries information, so they are quieter — and the
+    // slip, already red, is what the eye lands on.
     val (glyph, color, weight) = when (status) {
-        DayStatus.DONE -> Triple("✔", hc, FontWeight.Bold)
+        DayStatus.DONE ->
+            if (avoid) Triple("✓", hc.copy(alpha = 0.72f), FontWeight.Normal)
+            else Triple("✔", hc, FontWeight.Bold)
         DayStatus.SKIP -> Triple("–", c.faint, FontWeight.Normal)
         DayStatus.PARTIAL -> Triple(names.compact(value ?: 0.0), hc, FontWeight.Bold)
         DayStatus.MISS -> Triple("✕", c.danger, FontWeight.Bold)
         DayStatus.UNSCHEDULED, DayStatus.PRESTART -> Triple("·", c.cellOff, FontWeight.Normal)
-        else -> Triple("✕", c.cellEmpty, FontWeight.Normal)
+        // Only reachable for an avoid habit on a day that hasn't happened yet.
+        else -> Triple(if (avoid) "·" else "✕", c.cellEmpty, FontWeight.Normal)
     }
 
     Box(
         Modifier
             .width(cellW).height(rowH)
             .combinedClickable(
+                onClickLabel = Strings.statusText(lang, habit, status),
                 onClick = {
                     // Measurable habits need a number, so a plain tap opens the
                     // sheet instead of guessing an amount.
@@ -332,7 +345,7 @@ private fun GridCell(
             color = color,
             fontWeight = weight,
             fontSize = when (status) {
-                DayStatus.DONE -> 17.sp
+                DayStatus.DONE -> if (avoid) 15.sp else 17.sp
                 DayStatus.PARTIAL -> 11.sp
                 else -> 15.sp
             },
