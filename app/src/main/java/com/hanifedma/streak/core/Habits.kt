@@ -270,6 +270,44 @@ object Habits {
     }
 
     // ------------------------------------------------------------
+    //  Starting over
+    // ------------------------------------------------------------
+
+    /**
+     * The habit put back to day zero, as if it had been created today: every
+     * recorded day dropped, and the start date moved to today.
+     *
+     * Both halves are required, and leaving either out is a real bug rather
+     * than a cosmetic one:
+     *
+     *  • Clearing only the log would leave `startDate` in the past, so every
+     *    day between then and now becomes a plain, un-recorded day. An
+     *    ordinary habit would report a long run of misses it never earned,
+     *    and an AVOID habit is worse — an empty day counts as kept, so it
+     *    would come back with a streak stretching all the way to its old
+     *    start date. The exact opposite of starting from zero.
+     *
+     *  • Moving only `startDate` would leave the old entries in place. They
+     *    sit before the new start, and [HabitFactory.withLog] anchors
+     *    `firstDay` to the OLDEST entry precisely so back-filled history is
+     *    never ignored — so the habit would carry on exactly as before and
+     *    the button would look broken.
+     *
+     * The result is deliberately identical to a habit created this morning
+     * rather than to a blank slate. That is what makes an avoid habit read as
+     * kept for today: it is the resting state of a brand-new one, not
+     * leftover history.
+     */
+    fun resetToDayZero(habit: Habit, todayK: String): Habit =
+        HabitFactory.withLog(habit.copy(startDate = todayK), emptyMap())
+
+    /** Is this habit already exactly what [resetToDayZero] would make it —
+     *  nothing recorded, and starting today? Lets a caller skip a pointless
+     *  write. */
+    fun isAtDayZero(habit: Habit, todayK: String): Boolean =
+        habit.startDate == todayK && habit.log.isEmpty()
+
+    // ------------------------------------------------------------
     //  Streaks
     // ------------------------------------------------------------
 

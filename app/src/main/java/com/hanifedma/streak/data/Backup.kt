@@ -164,8 +164,17 @@ object Backup {
             if (match != null) {
                 val log = HashMap(inc.log)
                 log.putAll(match.log) // existing wins
-                if (log.size == match.log.size) continue // nothing new to write
-                ops.add(WriteOp.Update(match.id, HabitFactory.withLog(match, log)))
+                // The earlier of the two start dates, for the same reason the
+                // logs are merged rather than replaced: an import can only
+                // ever add history back. It matters most right after "start
+                // over" — without this, restoring a backup brought the entries
+                // back but left the habit claiming it began today, so its
+                // stats read from the wrong date.
+                val startDate = minOf(inc.startDate, match.startDate)
+                // Nothing new to write — don't spend a write on it.
+                if (log.size == match.log.size && startDate == match.startDate) continue
+                ops.add(WriteOp.Update(
+                    match.id, HabitFactory.withLog(match.copy(startDate = startDate), log)))
                 merged++
             } else {
                 maxOrder += 1

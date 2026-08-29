@@ -1,6 +1,7 @@
 package com.hanifedma.streak.ui.screens
 
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -181,10 +182,14 @@ fun SettingsSheet(
     onExportJson: () -> Unit,
     onExportCsv: () -> Unit,
     onImport: () -> Unit,
+    onResetAll: () -> Unit,
     onClearAll: () -> Unit,
     onAddWidget: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
+    // Archived habits are counted too: they are still habits, they still carry
+    // history, and both buttons at the bottom act on every one of them.
+    val hasHabits = state.habits.isNotEmpty()
     val c = Streak.colors
     Column(
         Modifier
@@ -257,9 +262,38 @@ fun SettingsSheet(
             Text(t(lang, "settings.addWidgetHint"), color = c.muted, fontSize = 12.sp)
             Spacer(Modifier.height(22.dp))
         }
+        // Its own section, deliberately not inside the danger zone below.
+        // "Start over" and "delete everything" are the two things in here you
+        // cannot take back, and putting them side by side under one heading is
+        // how someone reaches for one and hits the other. This one keeps your
+        // habits.
+        SectionLabel(t(lang, "settings.reset"))
+        Text(t(lang, "settings.resetHint"), color = c.muted, fontSize = 12.sp)
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(
+            onClick = onResetAll,
+            enabled = hasHabits,
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, if (hasHabits) c.warn else c.border),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = c.warn, disabledContentColor = c.muted,
+            ),
+        ) {
+            // No fixed height and free to wrap: the label is a sentence, and
+            // at a 2× font scale on a small phone a single line runs off the
+            // edge of the sheet.
+            Text(
+                "↺  " + t(lang, "settings.resetBtn"),
+                textAlign = TextAlign.Center,
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(t(lang, "settings.resetBackupHint"), color = c.muted, fontSize = 12.sp)
+
+        Spacer(Modifier.height(22.dp))
         SectionLabel(t(lang, "settings.danger"))
-        TextButton(onClick = onClearAll) {
-            Text(t(lang, "settings.clear"), color = c.danger)
+        TextButton(onClick = onClearAll, enabled = hasHabits) {
+            Text(t(lang, "settings.clear"), color = if (hasHabits) c.danger else c.muted)
         }
 
         Spacer(Modifier.height(16.dp))

@@ -47,6 +47,9 @@ Everything the web app does:
   the arrows (which is also the path TalkBack can take)
 - **Google sign-in** with real-time sync, or no account at all
 - **Offline** — everything works with no signal and syncs when you're back
+- **Start over** — Settings → *Start over* puts every habit and avoid back to
+  day zero at once: the habits stay, only the history goes, so everything
+  reads as if you had created it this morning. Undo is offered afterwards
 - **Backup** — export JSON or CSV, import JSON (same format as the web app)
 - **Korean and English**, dark and light, Korean and dark by default
 

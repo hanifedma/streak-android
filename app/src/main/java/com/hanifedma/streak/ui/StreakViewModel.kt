@@ -411,6 +411,67 @@ class StreakViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Put every habit back to day zero — keeping the habits, dropping the
+     * history. See [Habits.resetToDayZero] for what that means per habit.
+     *
+     * Archived habits are included. They are still habits and they still hold
+     * a log; leaving them out would mean un-archiving one later brought a
+     * year of old history back into a list that is supposed to have started
+     * today.
+     */
+    fun resetEverything() {
+        // The clock, not state.today. An app left open overnight only learns
+        // about the new day on its next refreshToday(), and stamping every
+        // habit with yesterday would leave today looking like a missed day on
+        // all of them.
+        val today = Habits.todayKey()
+        refreshToday()
+
+        val targets = _state.value.habits.filterNot { Habits.isAtDayZero(it, today) }
+        if (targets.isEmpty()) { toast("toast.resetNone"); return }
+
+        // Taken before the write, so Undo restores exactly what was there.
+        val before = targets.map { it.id to (it.log to it.startDate) }
+
+        viewModelScope.launch {
+            try {
+                store?.writeMany(targets.map { WriteOp.Update(it.id, Habits.resetToDayZero(it, today)) })
+                toast(
+                    Strings.countKey("toast.reset", targets.size), listOf("n" to targets.size),
+                    actionKey = "toast.undo", action = { undoReset(before) },
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Reset failed", e); toast("err.save", isError = true)
+            }
+        }
+    }
+
+    /** Put back what [resetEverything] cleared. */
+    private fun undoReset(before: List<Pair<String, Pair<Map<String, Double>, String>>>) {
+        viewModelScope.launch {
+            val ops = before.mapNotNull { (id, snapshot) ->
+                val (log, startDate) = snapshot
+                // Deleted while the snackbar was up — nothing to restore into.
+                val now = habitById(id) ?: return@mapNotNull null
+                // Anything ticked since the reset is kept: the new entries win
+                // over the old ones for the same day, so an undo can only ever
+                // add history back.
+                WriteOp.Update(
+                    id,
+                    HabitFactory.withLog(now.copy(startDate = startDate), log + now.log),
+                )
+            }
+            if (ops.isEmpty()) return@launch
+            try {
+                store?.writeMany(ops)
+                toast("toast.resetUndone")
+            } catch (e: Exception) {
+                Log.e(TAG, "Undo reset failed", e); toast("err.save", isError = true)
+            }
+        }
+    }
+
     // ------------------------------------------------------------
     //  Backup
     // ------------------------------------------------------------

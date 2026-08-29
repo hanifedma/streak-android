@@ -642,6 +642,82 @@ class HabitsTest {
     )
 
     // ----------------------------------------------------------
+    //  starting over
+    // ----------------------------------------------------------
+    // "Restart everything from today" has to leave a habit indistinguishable
+    // from one created this morning. Clearing only half of it is the failure
+    // mode these guard: a stale startDate hands an avoid habit a streak it
+    // never earned, and stale entries keep firstDay anchored in the past.
+
+    private val worn = mk(
+        startDate = "2025-06-01",
+        log = mapOf("2025-06-02" to 1.0, "2026-01-08" to 1.0, "2026-01-09" to Habits.SKIP),
+    )
+
+    @Test fun resetClearsTheLogAndMovesTheStartDate() {
+        val fresh = Habits.resetToDayZero(worn, today)
+        assertTrue(fresh.log.isEmpty())
+        assertEquals(today, fresh.startDate)
+        // The whole point of also moving startDate: firstDay is derived from
+        // both, and an old one left behind keeps the history alive.
+        assertEquals(today, fresh.firstDay)
+    }
+
+    @Test fun resetPutsEveryNumberBackToZero() {
+        val fresh = Habits.resetToDayZero(worn, today)
+        assertEquals(DayStatus.PRESTART, Habits.statusOf(fresh, "2026-01-09", today))
+        assertEquals(DayStatus.NONE, Habits.statusOf(fresh, today, today))
+        assertEquals(0, Habits.computeStreaks(fresh, today).current)
+        assertEquals(0, Habits.computeStreaks(fresh, today).best)
+        assertEquals(0, Habits.totalDone(fresh, today))
+        assertEquals(0f, Habits.score(fresh, today, 30), 0.0001f)
+    }
+
+    @Test fun resetKeepsTheHabitItself() {
+        val h = mk(name = "Run", color = "sky", type = "measurable", target = 8.0,
+            unit = "km", freq = Freq.Weekdays(listOf(1, 3)), log = mapOf("2026-01-05" to 8.0))
+        val fresh = Habits.resetToDayZero(h, today)
+        assertEquals("Run", fresh.name)
+        assertEquals("sky", fresh.color)
+        assertEquals(8.0, fresh.target, 0.0001)
+        assertEquals("km", fresh.unit)
+        assertEquals(Freq.Weekdays(listOf(1, 3)), fresh.freq)
+    }
+
+    @Test fun resetAvoidHabitLooksLikeANewOne() {
+        // An avoid habit resets to exactly what a NEW avoid habit looks like —
+        // kept for today, because that is its resting state, not leftover
+        // history.
+        val fresh = Habits.resetToDayZero(
+            av(startDate = "2025-06-01", log = mapOf("2025-07-04" to Habits.BROKE)), today)
+        assertEquals(DayStatus.DONE, Habits.statusOf(fresh, today, today))
+        assertEquals(1, Habits.computeStreaks(fresh, today).current)
+        assertEquals(0, Habits.totalMissed(fresh, today))
+        assertEquals(DayStatus.PRESTART, Habits.statusOf(fresh, "2025-07-04", today))
+    }
+
+    @Test fun resetAvoidHabitDoesNotInheritItsOldLifetime() {
+        // The bug that clearing the log alone would cause: 200-odd empty days
+        // before today, every one of them counted as kept.
+        val fresh = Habits.resetToDayZero(av(startDate = "2025-06-01"), today)
+        assertTrue(Habits.computeStreaks(fresh, today).current < 2)
+    }
+
+    @Test fun isAtDayZeroSpotsAnUntouchedHabit() {
+        assertTrue(Habits.isAtDayZero(mk(startDate = today), today))
+        assertTrue(!Habits.isAtDayZero(mk(startDate = today, log = mapOf(today to 1.0)), today))
+        assertTrue(!Habits.isAtDayZero(mk(startDate = "2026-01-01"), today))
+        // A skip is an entry like any other; leaving it keeps firstDay back.
+        assertTrue(!Habits.isAtDayZero(mk(startDate = today, log = mapOf(today to Habits.SKIP)), today))
+    }
+
+    @Test fun resettingIsIdempotent() {
+        val once = Habits.resetToDayZero(worn, today)
+        assertTrue(Habits.isAtDayZero(once, today))
+        assertEquals(once, Habits.resetToDayZero(once, today))
+    }
+
+    // ----------------------------------------------------------
     //  calendar grid
     // ----------------------------------------------------------
 

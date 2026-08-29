@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.padding
@@ -84,8 +86,18 @@ private sealed class Sheet {
     data class Editor(val habit: Habit, val isNew: Boolean) : Sheet()
     data class Cell(val habit: Habit, val dayKey: String) : Sheet()
     data class Stats(val habitId: String) : Sheet()
+    /**
+     * @param detail an optional second line. The question and its
+     *        consequences are two different things: a heading that has to
+     *        spell out both stops being a question you can read at a glance,
+     *        and the part people most need to see — how much is about to be
+     *        erased — ends up buried in it.
+     */
     data class Confirm(
-        val message: String, val confirmLabel: String, val onConfirm: () -> Unit,
+        val message: String,
+        val confirmLabel: String,
+        val detail: String? = null,
+        val onConfirm: () -> Unit,
     ) : Sheet()
     object Settings : Sheet()
     object Archived : Sheet()
@@ -345,6 +357,7 @@ fun StreakApp(vm: StreakViewModel, widthDp: Int) {
                     }
                     is Sheet.Confirm -> ConfirmSheet(
                         message = current.message,
+                        detail = current.detail,
                         confirmLabel = current.confirmLabel,
                         cancelLabel = t(lang, "confirm.no"),
                         onConfirm = { current.onConfirm(); sheet = null },
@@ -361,6 +374,17 @@ fun StreakApp(vm: StreakViewModel, widthDp: Int) {
                         onAddWidget = if (vm.canPinWidget(context)) {
                             { vm.requestPinWidget(context); sheet = null }
                         } else null,
+                        onResetAll = {
+                            // Re-read the list here: the sheet can have been
+                            // open across a sync, and the count in the
+                            // question has to be the one the button acts on.
+                            val n = state.habits.size
+                            sheet = Sheet.Confirm(
+                                t(lang, "settings.resetConfirm"),
+                                t(lang, "settings.resetYes"),
+                                Strings.tCount(lang, "settings.resetDetail", n),
+                            ) { vm.resetEverything() }
+                        },
                         onClearAll = {
                             sheet = Sheet.Confirm(
                                 t(lang, "settings.clearConfirm"), t(lang, "confirm.yes"),
@@ -420,10 +444,18 @@ private fun ConfirmSheet(
     cancelLabel: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
+    detail: String? = null,
 ) {
     val c = Streak.colors
-    Column(Modifier.fillMaxWidth().padding(20.dp)) {
-        Text(message, color = c.text, fontSize = 16.sp)
+    // Scrollable: in landscape on a short screen, or at a 2× font scale, the
+    // question plus its detail plus the buttons no longer fit, and without
+    // this the buttons are the part that goes off the bottom.
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp)) {
+        Text(message, color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        if (detail != null) {
+            Spacer(Modifier.height(10.dp))
+            Text(detail, color = c.muted, fontSize = 14.sp, lineHeight = 20.sp)
+        }
         Spacer(Modifier.height(20.dp))
         Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
             androidx.compose.material3.TextButton(onClick = onDismiss) {

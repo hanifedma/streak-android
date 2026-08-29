@@ -26,6 +26,10 @@ val DarkAccent = Color(0xFF22C55E)
 val DarkAccentHover = Color(0xFF4ADE80)
 val DarkAccentContrast = Color(0xFF052E16)
 val DarkDanger = Color(0xFFF4566B)
+
+// Amber, for the one action that is irreversible but destroys nothing you
+// chose to keep. Red stays reserved for deletion, so the two never blur.
+val DarkWarn = Color(0xFFFBBF24)
 val DarkCellEmpty = Color(0xFF2A2A2B)
 val DarkCellOff = Color(0xFF1F1F20)
 val DarkTrack = Color(0xFF2A2A2B)
@@ -45,6 +49,9 @@ val LightAccent = Color(0xFF16A34A)
 val LightAccentHover = Color(0xFF15803D)
 val LightAccentContrast = Color(0xFFFFFFFF)
 val LightDanger = Color(0xFFE11D48)
+
+// Darker than the dark theme's amber: #FBBF24 on white fails contrast.
+val LightWarn = Color(0xFFB45309)
 val LightCellEmpty = Color(0xFFE9EBEE)
 val LightCellOff = Color(0xFFF5F6F8)
 val LightTrack = Color(0xFFE9EBEE)
@@ -96,6 +103,7 @@ data class StreakColors(
     val accentHover: Color,
     val accentContrast: Color,
     val danger: Color,
+    val warn: Color,
     val cellEmpty: Color,
     val cellOff: Color,
     val track: Color,
@@ -113,7 +121,8 @@ val DarkStreakColors = StreakColors(
     elevated = DarkElevated, border = DarkBorder, borderStrong = DarkBorderStrong,
     text = DarkText, muted = DarkMuted, faint = DarkFaint,
     accent = DarkAccent, accentHover = DarkAccentHover, accentContrast = DarkAccentContrast,
-    danger = DarkDanger, cellEmpty = DarkCellEmpty, cellOff = DarkCellOff, track = DarkTrack,
+    danger = DarkDanger, warn = DarkWarn,
+    cellEmpty = DarkCellEmpty, cellOff = DarkCellOff, track = DarkTrack,
 )
 
 val LightStreakColors = StreakColors(
@@ -122,7 +131,8 @@ val LightStreakColors = StreakColors(
     elevated = LightElevated, border = LightBorder, borderStrong = LightBorderStrong,
     text = LightText, muted = LightMuted, faint = LightFaint,
     accent = LightAccent, accentHover = LightAccentHover, accentContrast = LightAccentContrast,
-    danger = LightDanger, cellEmpty = LightCellEmpty, cellOff = LightCellOff, track = LightTrack,
+    danger = LightDanger, warn = LightWarn,
+    cellEmpty = LightCellEmpty, cellOff = LightCellOff, track = LightTrack,
 )
 
 /** Reachable anywhere as `Streak.colors`. */
