@@ -22,3 +22,9 @@ app/google-services.json
 *.jks
 *.keystore
 keystore.properties
+
+# Plain-text notes about the signing key, kept beside it on purpose so the
+# password is findable when you need it years from now. Same secret as
+# keystore.properties, so the same rule applies: never committed, and never
+# the only copy — back it up somewhere off this machine.
+KEYSTORE-README.txt
